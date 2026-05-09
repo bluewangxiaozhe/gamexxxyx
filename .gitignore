@@ -33,3 +33,6 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+
+# API (部署到服务器)
+api-package.json
