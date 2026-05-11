@@ -22,7 +22,11 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<ApiR
       return { success: true, data: data as T }
     }
     
-    return data as ApiResponse<T>
+    if (typeof data === 'object' && data !== null && 'success' in data) {
+      return data as ApiResponse<T>
+    }
+    
+    return { success: true, data: data as T }
   } catch (error) {
     return {
       success: false,
