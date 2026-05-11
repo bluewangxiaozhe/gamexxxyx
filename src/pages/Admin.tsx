@@ -4,6 +4,7 @@ import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Ima
 import { useGames } from '@/hooks/useGames'
 import { api } from '@/utils/api'
 import type { Game } from '@/types'
+import FileUploader from '@/components/FileUploader'
 
 interface BannerConfig {
   id: number
@@ -898,31 +899,27 @@ export default function Admin() {
                     />
                   </div>
 
-                  {/* Download URL */}
+                  {/* Download File */}
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      下载地址 <span className="text-red-500">*</span>
+                      游戏文件 <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="url"
+                    <FileUploader
+                      type="game"
                       value={form.downloadUrl}
-                      onChange={e => setForm({ ...form, downloadUrl: e.target.value })}
-                      placeholder="https://example.com/game.zip"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onChange={(url) => setForm({ ...form, downloadUrl: url })}
                     />
                   </div>
 
-                  {/* Image URL */}
+                  {/* Cover Image */}
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      封面图片地址
+                      封面图片
                     </label>
-                    <input
-                      type="url"
+                    <FileUploader
+                      type="cover"
                       value={form.imageUrl}
-                      onChange={e => setForm({ ...form, imageUrl: e.target.value })}
-                      placeholder="https://example.com/cover.jpg"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onChange={(url) => setForm({ ...form, imageUrl: url })}
                     />
                   </div>
 

@@ -2,9 +2,25 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Cloudflare R2 配置
+const r2Config = {
+  region: 'auto',
+  endpoint: `https://${process.env.R2_ACCOUNT_ID || '14e1786491875d77c4748072f222204e'}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || 'd846a04a9f5bdbffa32aba4fcc2e69c7',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '76cddb200c25774ed466562a6a70680a2278e42f00e443bd60e2470b293930eb'
+  }
+};
+
+const r2Client = new S3Client(r2Config);
+const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'wang';
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || 'https://oss.wangzhe.me';
 
 // 中间件
 app.use(cors());
@@ -127,9 +143,128 @@ app.get('/api/admin/games', async (req, res) => {
   }
 });
 
+// 文件上传配置
+const createMulterUpload = (fieldName, limits) => {
+  const storage = multer.memoryStorage();
+  return multer({
+    storage,
+    limits,
+    fileFilter: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase().slice(1);
+      const allowedExts = limits.allowedExtensions || [];
+      
+      if (limits.allowedExtensions && !allowedExts.includes(ext)) {
+        return cb(new Error(`不支持的文件格式: .${ext}`));
+      }
+      cb(null, true);
+    }
+  });
+};
+
+const gameUpload = createMulterUpload('game', {
+  fileSize: 1024 * 1024 * 1024, // 1GB
+  allowedExtensions: ['apk', 'ipa', 'exe', 'msi', 'dmg', 'zip', 'rar', '7z', 'tar.gz', 'tar']
+});
+
+const coverUpload = createMulterUpload('cover', {
+  fileSize: 50 * 1024 * 1024, // 50MB
+  allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp']
+});
+
+const screenshotUpload = createMulterUpload('screenshot', {
+  fileSize: 20 * 1024 * 1024, // 20MB
+  allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp']
+});
+
+const uploadToR2 = async (file, folder) => {
+  const timestamp = Date.now();
+  const originalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filename = `${timestamp}_${originalName}`;
+  const key = `${folder}/${filename}`;
+  
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    Body: file.buffer,
+    ContentType: file.mimetype
+  });
+  
+  await r2Client.send(command);
+  
+  const url = `${R2_PUBLIC_URL}/${key}`;
+  
+  return {
+    url,
+    filename,
+    size: file.size,
+    path: key
+  };
+};
+
+// 游戏安装包上传
+app.post('/api/upload/game', (req, res) => {
+  gameUpload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: '请选择要上传的游戏文件' });
+    }
+    
+    try {
+      const result = await uploadToR2(req.file, 'games');
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+});
+
+// 封面图片上传
+app.post('/api/upload/cover', (req, res) => {
+  coverUpload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: '请选择要上传的封面图片' });
+    }
+    
+    try {
+      const result = await uploadToR2(req.file, 'covers');
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+});
+
+// 截图上传
+app.post('/api/upload/screenshot', (req, res) => {
+  screenshotUpload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: '请选择要上传的截图' });
+    }
+    
+    try {
+      const result = await uploadToR2(req.file, 'screenshots');
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+});
+
 // 启动服务
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health: http://localhost:${PORT}/api/health`);
   console.log(`🎮 Games: http://localhost:${PORT}/api/games`);
+  console.log(`☁️ R2 Storage: ${R2_PUBLIC_URL}`);
 });
