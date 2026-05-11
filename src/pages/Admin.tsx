@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Upload } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
@@ -153,6 +153,83 @@ export default function Admin() {
   const [form, setForm] = useState<GameForm>(createEmptyForm())
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  // 记录加载失败的图片 URL（用于显示默认头像）
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set())
+  const handleImageError = (url: string) => {
+    setBrokenImages(prev => {
+      const next = new Set(prev)
+      next.add(url)
+      return next
+    })
+  }
+  const showDefaultAvatar = (url: string) => url && brokenImages.has(url)
+
+  // 文件信息缓存（解决 onFileInfo 闭包 stale state 问题）
+  const fileInfoRef = useRef<{ name: string; size: string } | null>(null)
+  // Dirty state ref（用于 beforeunload 检测）
+  const isDirtyRef = useRef(false)
+  // 记录上一次 form，用于检测变化
+  const prevFormRef = useRef<GameForm>(createEmptyForm())
+
+  // Dirty state 检测：追踪表单变化
+  useEffect(() => {
+    const isDirty =
+      form.name !== prevFormRef.current.name ||
+      form.description !== prevFormRef.current.description ||
+      form.version !== prevFormRef.current.version ||
+      form.size !== prevFormRef.current.size ||
+      form.downloadUrl !== prevFormRef.current.downloadUrl ||
+      form.imageUrl !== prevFormRef.current.imageUrl ||
+      form.category !== prevFormRef.current.category ||
+      form.status !== prevFormRef.current.status ||
+      form.rating !== prevFormRef.current.rating ||
+      form.downloads !== prevFormRef.current.downloads ||
+      form.tags !== prevFormRef.current.tags
+    isDirtyRef.current = isDirty
+    prevFormRef.current = form
+  }, [form])
+
+  // 文件上传后自动填充名称和大小（监听 downloadUrl 变化）
+  useEffect(() => {
+    if (!form.downloadUrl) return
+    const fi = fileInfoRef.current
+    if (!fi) return
+    // 仅在添加模式下自动填充，编辑模式不覆盖已有名称
+    if (!editingGame) {
+      if (!form.name.trim() && fi.name) {
+        const cleanName = fi.name.replace(/\.(apk|ipa|exe|msi|dmg|zip|rar|7z|tar\.gz|tar)$/i, '')
+        setForm(f => ({ ...f, name: cleanName }))
+      }
+      if (!form.size && fi.size) {
+        setForm(f => ({ ...f, size: fi.size }))
+      }
+    }
+  }, [form.downloadUrl, editingGame])
+
+  // beforeunload 警告（防止误关页面）
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirtyRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  // 关闭弹窗（带 dirty 检测）
+  const handleCloseModal = () => {
+    if (isDirtyRef.current) {
+      if (!confirm('还有未保存的内容，确定要退出吗？')) return
+    }
+    setIsModalOpen(false)
+    setEditingGame(null)
+    setForm(createEmptyForm())
+    setMessage('')
+    fileInfoRef.current = null
+    isDirtyRef.current = false
+  }
 
   // Banner 管理状态
   const [banners, setBanners] = useState<BannerConfig[]>(loadBanners)
@@ -194,13 +271,6 @@ export default function Admin() {
     setEditingGame(game)
     setForm(gameToForm(game))
     setIsModalOpen(true)
-    setMessage('')
-  }
-
-  const closeModal = () => {
-    setIsModalOpen(false)
-    setEditingGame(null)
-    setForm(createEmptyForm())
     setMessage('')
   }
 
@@ -292,7 +362,7 @@ export default function Admin() {
       if (response.success) {
         setMessage(editingGame ? '修改成功！' : '添加成功！')
         await refetch()
-        setTimeout(() => closeModal(), 800)
+        setTimeout(() => handleCloseModal(), 800)
       } else {
         setMessage(response.message || '保存失败')
       }
@@ -697,8 +767,8 @@ export default function Admin() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                            {game.imageUrl ? (
-                              <img src={game.imageUrl} alt={game.name} className="w-full h-full object-cover" />
+                            {game.imageUrl && !showDefaultAvatar(game.imageUrl) ? (
+                              <img src={game.imageUrl} alt={game.name} className="w-full h-full object-cover" onError={() => handleImageError(game.imageUrl)} />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-sm font-bold">
                                 {game.name.charAt(0)}
@@ -760,8 +830,8 @@ export default function Admin() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
-                    {game.imageUrl ? (
-                      <img src={game.imageUrl} alt={game.name} className="w-full h-full object-cover" />
+                    {game.imageUrl && !showDefaultAvatar(game.imageUrl) ? (
+                      <img src={game.imageUrl} alt={game.name} className="w-full h-full object-cover" onError={() => handleImageError(game.imageUrl)} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-lg font-bold">
                         {game.name.charAt(0)}
@@ -826,7 +896,7 @@ export default function Admin() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={(e) => e.target === e.currentTarget && closeModal()}
+            onClick={(e) => e.target === e.currentTarget && handleCloseModal()}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -839,7 +909,7 @@ export default function Admin() {
                   {editingGame ? '编辑游戏' : '添加游戏'}
                 </h2>
                 <button
-                  onClick={closeModal}
+                  onClick={handleCloseModal}
                   className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -954,14 +1024,7 @@ export default function Admin() {
                       游戏文件 <span className="text-red-500">*</span>
                     </label>
                     {renderUploader('game', form.downloadUrl, (url) => setForm({ ...form, downloadUrl: url }), (
-                      (name: string, size: string) => {
-                        if (!form.name.trim()) {
-                          const cleanName = name.replace(/\.(apk|ipa|exe|msi|dmg|zip|rar|7z|tar\.gz|tar)$/i, '')
-                          setForm(f => ({ ...f, name: cleanName, size: size }))
-                        } else if (!form.size) {
-                          setForm(f => ({ ...f, size }))
-                        }
-                      }
+                      (name: string, size: string) => { fileInfoRef.current = { name, size } }
                     ))}
                   </div>
 
@@ -1006,8 +1069,8 @@ export default function Admin() {
                     <span className="text-sm text-gray-500 mb-3 block">预览</span>
                     <div className="flex items-center gap-3">
                       <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
-                        {form.imageUrl ? (
-                          <img src={form.imageUrl} alt={form.name} className="w-full h-full object-cover" />
+                        {form.imageUrl && !showDefaultAvatar(form.imageUrl) ? (
+                          <img src={form.imageUrl} alt={form.name} className="w-full h-full object-cover" onError={() => handleImageError(form.imageUrl)} />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-xl font-bold">
                             {form.name.charAt(0)}
@@ -1035,7 +1098,7 @@ export default function Admin() {
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
                   <button
-                    onClick={closeModal}
+                    onClick={handleCloseModal}
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消
