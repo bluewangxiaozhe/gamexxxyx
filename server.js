@@ -3,7 +3,8 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -176,10 +177,40 @@ const screenshotUpload = createMulterUpload('screenshot', {
   allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp']
 });
 
+const checkFileExists = async (key) => {
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key
+    });
+    await r2Client.send(command);
+    return true;
+  } catch (err) {
+    if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    return false;
+  }
+};
+
+const generateUniqueFilename = async (originalName, folder) => {
+  let filename = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  let key = `${folder}/${filename}`;
+  let counter = 1;
+  
+  while (await checkFileExists(key)) {
+    const ext = path.extname(filename);
+    const nameWithoutExt = path.basename(filename, ext);
+    filename = `${nameWithoutExt}(${counter})${ext}`;
+    key = `${folder}/${filename}`;
+    counter++;
+  }
+  
+  return filename;
+};
+
 const uploadToR2 = async (file, folder) => {
-  const timestamp = Date.now();
-  const originalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const filename = `${timestamp}_${originalName}`;
+  const filename = await generateUniqueFilename(file.originalname, folder);
   const key = `${folder}/${filename}`;
   
   const command = new PutObjectCommand({
@@ -198,6 +229,26 @@ const uploadToR2 = async (file, folder) => {
     filename,
     size: file.size,
     path: key
+  };
+};
+
+const createPresignedUploadUrl = async (filename, folder, contentType, expiresIn = 3600) => {
+  const uniqueFilename = await generateUniqueFilename(filename, folder);
+  const key = `${folder}/${uniqueFilename}`;
+  
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ContentType: contentType
+  });
+  
+  const signedUrl = await getSignedUrl(r2Client, command, { expiresIn });
+  
+  return {
+    uploadUrl: signedUrl,
+    filename: uniqueFilename,
+    key,
+    publicUrl: `${R2_PUBLIC_URL}/${key}`
   };
 };
 
@@ -259,6 +310,33 @@ app.post('/api/upload/screenshot', (req, res) => {
       res.status(500).json({ success: false, error: err.message });
     }
   });
+});
+
+// 获取预签名上传URL（用于Uppy等组件直接上传到R2）
+app.post('/api/upload/presign', async (req, res) => {
+  try {
+    const { filename, type, folder } = req.body;
+    
+    if (!filename || !type) {
+      return res.status(400).json({ success: false, error: '缺少 filename 或 type 参数' });
+    }
+    
+    let targetFolder = folder;
+    let contentType = type;
+    
+    if (!targetFolder) {
+      if (type.startsWith('image/')) {
+        targetFolder = 'covers';
+      } else {
+        targetFolder = 'games';
+      }
+    }
+    
+    const result = await createPresignedUploadUrl(filename, targetFolder, contentType);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // 启动服务

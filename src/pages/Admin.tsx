@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft } from 'lucide-react'
+import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Upload } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api } from '@/utils/api'
 import type { Game } from '@/types'
 import FileUploader from '@/components/FileUploader'
+import UppyUploader from '@/components/UppyUploader'
+import FilepondUploader from '@/components/FilepondUploader'
+
+type UploaderType = 'default' | 'uppy' | 'filepond'
 
 interface BannerConfig {
   id: number
@@ -157,6 +161,11 @@ export default function Admin() {
   const [bannerForm, setBannerForm] = useState<BannerConfig>(defaultBanners[0])
   const [bannerMessage, setBannerMessage] = useState('')
 
+  // 上传组件选择状态
+  const [uploaderType, setUploaderType] = useState<UploaderType>(() => {
+    return (localStorage.getItem('uploader_type') as UploaderType) || 'default'
+  })
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
@@ -237,6 +246,22 @@ export default function Admin() {
     ;[newBanners[index], newBanners[targetIndex]] = [newBanners[targetIndex], newBanners[index]]
     setBanners(newBanners)
     saveBanners(newBanners)
+  }
+
+  const handleUploaderChange = (type: UploaderType) => {
+    setUploaderType(type)
+    localStorage.setItem('uploader_type', type)
+  }
+
+  const renderUploader = (type: 'game' | 'cover' | 'screenshot', value: string, onChange: (url: string) => void) => {
+    switch (uploaderType) {
+      case 'uppy':
+        return <UppyUploader type={type} value={value} onChange={onChange} />
+      case 'filepond':
+        return <FilepondUploader type={type} value={value} onChange={onChange} />
+      default:
+        return <FileUploader type={type} value={value} onChange={onChange} />
+    }
   }
 
   const handleSave = async () => {
@@ -355,7 +380,29 @@ export default function Admin() {
             <h1 className="text-3xl font-bold text-gray-900">管理后台</h1>
             <p className="text-gray-500 mt-1">管理游戏列表，数据实时同步到数据库</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* 上传组件切换 */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg">
+              <Upload className="w-4 h-4 text-gray-500 mr-1" />
+              <span className="text-xs text-gray-500 mr-2">上传:</span>
+              {[
+                { key: 'default', label: '默认' },
+                { key: 'uppy', label: 'Uppy' },
+                { key: 'filepond', label: 'Filepond' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => handleUploaderChange(key as UploaderType)}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    uploaderType === key
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={exportJSON}
               className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -904,11 +951,7 @@ export default function Admin() {
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       游戏文件 <span className="text-red-500">*</span>
                     </label>
-                    <FileUploader
-                      type="game"
-                      value={form.downloadUrl}
-                      onChange={(url) => setForm({ ...form, downloadUrl: url })}
-                    />
+                    {renderUploader('game', form.downloadUrl, (url) => setForm({ ...form, downloadUrl: url }))}
                   </div>
 
                   {/* Cover Image */}
@@ -916,11 +959,7 @@ export default function Admin() {
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       封面图片
                     </label>
-                    <FileUploader
-                      type="cover"
-                      value={form.imageUrl}
-                      onChange={(url) => setForm({ ...form, imageUrl: url })}
-                    />
+                    {renderUploader('cover', form.imageUrl, (url) => setForm({ ...form, imageUrl: url }))}
                   </div>
 
                   {/* Tags */}

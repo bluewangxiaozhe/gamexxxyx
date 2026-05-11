@@ -18,10 +18,12 @@ interface UploadProgress {
   speed: string
 }
 
+const API_BASE_URL = 'https://api.567zm.com'
+
 const API_ENDPOINTS = {
-  game: '/api/upload/game',
-  cover: '/api/upload/cover',
-  screenshot: '/api/upload/screenshot',
+  game: `${API_BASE_URL}/api/upload/game`,
+  cover: `${API_BASE_URL}/api/upload/cover`,
+  screenshot: `${API_BASE_URL}/api/upload/screenshot`,
 }
 
 const DEFAULT_ACCEPT = {
