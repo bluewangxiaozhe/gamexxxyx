@@ -3,7 +3,7 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
-const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
@@ -110,15 +110,42 @@ app.put('/api/games/:id', async (req, res) => {
   }
 });
 
+// 从 R2 URL 提取 key（用于删除）
+const extractR2Key = (url) => {
+  if (!url || !url.includes(R2_PUBLIC_URL)) return null
+  const encoded = url.split(R2_PUBLIC_URL + '/')[1]
+  if (!encoded) return null
+  try { return decodeURIComponent(encoded) } catch { return encoded }
+}
+
+const deleteFromR2 = async (url) => {
+  const key = extractR2Key(url)
+  if (!key) return
+  try {
+    await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key }))
+  } catch (err) { console.warn('R2 delete failed:', err.message) }
+}
+
 // 删除游戏
 app.delete('/api/games/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM games WHERE id = ?', [req.params.id]);
-    res.json({ success: true });
+    const [rows] = await pool.query('SELECT * FROM games WHERE id = ?', [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: 'Game not found' })
+    const game = rows[0]
+    if (game.downloadUrl) deleteFromR2(game.downloadUrl)
+    if (game.imageUrl) deleteFromR2(game.imageUrl)
+    if (game.screenshots) {
+      try {
+        const screenshots = typeof game.screenshots === 'string' ? JSON.parse(game.screenshots) : (game.screenshots || [])
+        screenshots.forEach(url => deleteFromR2(url))
+      } catch {}
+    }
+    await pool.query('DELETE FROM games WHERE id = ?', [req.params.id])
+    res.json({ success: true })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
 // 管理员登录
 app.post('/api/admin/login', async (req, res) => {
@@ -151,6 +178,9 @@ const createMulterUpload = (fieldName, limits) => {
     storage,
     limits,
     fileFilter: (req, file, cb) => {
+      // 修复中文文件名编码
+      file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      
       const ext = path.extname(file.originalname).toLowerCase().slice(1);
       const allowedExts = limits.allowedExtensions || [];
       
@@ -194,7 +224,7 @@ const checkFileExists = async (key) => {
 };
 
 const generateUniqueFilename = async (originalName, folder) => {
-  let filename = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  let filename = originalName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
   let key = `${folder}/${filename}`;
   let counter = 1;
   
@@ -209,6 +239,10 @@ const generateUniqueFilename = async (originalName, folder) => {
   return filename;
 };
 
+const toAsciiFallback = (str) => {
+  return str.replace(/[^\x00-\x7F]/g, '_');
+};
+
 const uploadToR2 = async (file, folder) => {
   const filename = await generateUniqueFilename(file.originalname, folder);
   const key = `${folder}/${filename}`;
@@ -217,12 +251,13 @@ const uploadToR2 = async (file, folder) => {
     Bucket: BUCKET_NAME,
     Key: key,
     Body: file.buffer,
-    ContentType: file.mimetype
+    ContentType: file.mimetype,
+    ContentDisposition: `attachment; filename="${toAsciiFallback(file.originalname)}"; filename*=UTF-8''${encodeURIComponent(file.originalname)}`
   });
   
   await r2Client.send(command);
   
-  const url = `${R2_PUBLIC_URL}/${key}`;
+  const url = `${R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
   
   return {
     url,
@@ -239,7 +274,8 @@ const createPresignedUploadUrl = async (filename, folder, contentType, expiresIn
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
-    ContentType: contentType
+    ContentType: contentType,
+    ContentDisposition: `attachment; filename="${toAsciiFallback(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`
   });
   
   const signedUrl = await getSignedUrl(r2Client, command, { expiresIn });
@@ -248,7 +284,7 @@ const createPresignedUploadUrl = async (filename, folder, contentType, expiresIn
     uploadUrl: signedUrl,
     filename: uniqueFilename,
     key,
-    publicUrl: `${R2_PUBLIC_URL}/${key}`
+    publicUrl: `${R2_PUBLIC_URL}/${encodeURIComponent(key)}`
   };
 };
 

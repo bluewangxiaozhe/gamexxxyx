@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import axios from 'axios'
-import { Upload, X, RefreshCw, File, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload, X, RefreshCw, File, CheckCircle, AlertCircle, Copy, Check } from 'lucide-react'
 
 interface FileUploaderProps {
   value?: string
   onChange: (url: string) => void
+  onFileInfo?: (name: string, size: string) => void
   type: 'game' | 'cover' | 'screenshot'
   accept?: Record<string, string[]>
   maxSize?: number
@@ -41,10 +42,12 @@ const DEFAULT_MAX_SIZE = {
 export default function FileUploader({
   value,
   onChange,
+  onFileInfo,
   type,
   accept,
   maxSize,
 }: FileUploaderProps) {
+  const [copied, setCopied] = useState(false)
   const [status, setStatus] = useState<UploadStatus>(value ? 'success' : 'idle')
   const [error, setError] = useState<string>('')
   const [progress, setProgress] = useState<UploadProgress>({ percentage: 0, speed: '0 B/s' })
@@ -112,10 +115,15 @@ export default function FileUploader({
           },
         })
 
-        const fileUrl = response.data.url || response.data.path || response.data.data
+        const fileUrl = response.data.data?.url || response.data.url || response.data.data
         setPreviewUrl(fileUrl)
         setStatus('success')
         onChange(fileUrl)
+        // 通知父组件文件名和大小（用于自动填充）
+        if (onFileInfo) {
+          const sizeStr = formatFileSize(file.size)
+          onFileInfo(file.name, sizeStr)
+        }
       } catch (err) {
         setStatus('error')
         if (axios.isAxiosError(err)) {
@@ -159,6 +167,24 @@ export default function FileUploader({
     setProgress({ percentage: 0, speed: '0 B/s' })
   }
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   const isImagePreview = (url: string): boolean => {
     return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)
   }
@@ -172,19 +198,29 @@ export default function FileUploader({
               <img
                 src={previewUrl}
                 alt={fileName}
-                className="max-h-32 object-contain rounded-lg"
+                className="max-h-48 w-auto object-contain rounded-lg"
+                style={{ maxWidth: '100%', aspectRatio: 'auto' }}
               />
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <File className="w-6 h-6 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{fileName}</p>
                 <p className="text-xs text-gray-500">{fileSize}</p>
+                {previewUrl && (
+                  <button
+                    onClick={() => copyToClipboard(previewUrl)}
+                    className="mt-1.5 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copied ? '已复制' : '复制链接'}
+                  </button>
+                )}
               </div>
-              <CheckCircle className="w-5 h-5 text-green-500" />
+              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
             </div>
           )}
         </div>

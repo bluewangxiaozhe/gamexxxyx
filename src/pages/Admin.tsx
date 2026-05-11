@@ -253,14 +253,14 @@ export default function Admin() {
     localStorage.setItem('uploader_type', type)
   }
 
-  const renderUploader = (type: 'game' | 'cover' | 'screenshot', value: string, onChange: (url: string) => void) => {
+  const renderUploader = (type: 'game' | 'cover' | 'screenshot', value: string, onChange: (url: string) => void, onFileInfo?: (name: string, size: string) => void) => {
     switch (uploaderType) {
       case 'uppy':
         return <UppyUploader type={type} value={value} onChange={onChange} />
       case 'filepond':
         return <FilepondUploader type={type} value={value} onChange={onChange} />
       default:
-        return <FileUploader type={type} value={value} onChange={onChange} />
+        return <FileUploader type={type} value={value} onChange={onChange} onFileInfo={onFileInfo} />
     }
   }
 
@@ -279,6 +279,8 @@ export default function Admin() {
 
     try {
       const gameData = formToGame(form)
+      // 下载量 × 100
+      gameData.downloads = (gameData.downloads || 0) * 100
       let response
 
       if (editingGame) {
@@ -830,9 +832,9 @@ export default function Admin() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex-shrink-0 px-6 py-4 flex items-center justify-between border-b border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900">
                   {editingGame ? '编辑游戏' : '添加游戏'}
                 </h2>
@@ -844,7 +846,7 @@ export default function Admin() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1">
                 {message && (
                   <div className={`p-3 rounded-lg text-sm ${
                     message.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
@@ -853,7 +855,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid sm:grid-cols-2 gap-5 max-h-[60vh] overflow-y-auto pr-1">
                   {/* Name */}
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -951,7 +953,16 @@ export default function Admin() {
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       游戏文件 <span className="text-red-500">*</span>
                     </label>
-                    {renderUploader('game', form.downloadUrl, (url) => setForm({ ...form, downloadUrl: url }))}
+                    {renderUploader('game', form.downloadUrl, (url) => setForm({ ...form, downloadUrl: url }), (
+                      (name: string, size: string) => {
+                        if (!form.name.trim()) {
+                          const cleanName = name.replace(/\.(apk|ipa|exe|msi|dmg|zip|rar|7z|tar\.gz|tar)$/i, '')
+                          setForm(f => ({ ...f, name: cleanName, size: size }))
+                        } else if (!form.size) {
+                          setForm(f => ({ ...f, size }))
+                        }
+                      }
+                    ))}
                   </div>
 
                   {/* Cover Image */}
