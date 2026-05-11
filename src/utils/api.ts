@@ -18,11 +18,15 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<ApiR
     
     const data = await response.json()
     
+    if (data === null || data === undefined) {
+      return { success: true, data: undefined as T }
+    }
+    
     if (Array.isArray(data)) {
       return { success: true, data: data as T }
     }
     
-    if (typeof data === 'object' && data !== null && 'success' in data) {
+    if (typeof data === 'object' && 'success' in data) {
       return data as ApiResponse<T>
     }
     
