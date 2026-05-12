@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 
+interface FileData {
+  url: string
+  filename?: string
+  size?: number
+}
+
 interface UppyUploaderProps {
-  value?: string
-  onChange: (url: string) => void
+  value?: FileData
+  onChange: (data: FileData) => void
   type: 'game' | 'cover' | 'screenshot'
 }
 
@@ -34,13 +40,14 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
+  const [fileData, setFileData] = useState<FileData | null>(null)
+  const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const config = TYPE_CONFIG[type]
 
   useEffect(() => {
     if (value) {
-      setPreview(value)
+      setFileData(value)
     }
   }, [value])
 
@@ -71,9 +78,10 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
       })
 
       if (response.data.success && response.data.data) {
-        const url = response.data.data.url
-        onChange(url)
-        setPreview(url)
+        const { url, filename, size } = response.data.data
+        const newFileData: FileData = { url, filename, size }
+        onChange(newFileData)
+        setFileData(newFileData)
         setError(null)
       } else {
         setError(response.data.error || '上传失败')
@@ -107,29 +115,76 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
     e.preventDefault()
   }
 
-  if (value || preview) {
-    const isImage = type !== 'game' && (preview?.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || value?.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i))
+  const handleCopyUrl = async () => {
+    if (fileData?.url) {
+      try {
+        await navigator.clipboard.writeText(fileData.url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (err) {
+        console.error('复制失败:', err)
+      }
+    }
+  }
+
+  if (value || fileData) {
+    const data = value || fileData
+    const isImage = type !== 'game' && data?.url?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i)
 
     return (
       <div className="w-full rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <span className="text-green-600 font-bold">✓</span>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-bold">✓</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-800">文件已上传</p>
+                {data?.filename && (
+                  <p className="text-xs text-green-700 mt-1">{data.filename}</p>
+                )}
+                {data?.size && (
+                  <p className="text-xs text-green-600 mt-0.5">{formatSize(data.size)}</p>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-green-800">文件已上传</p>
-              {isImage && (
-                <img src={preview || value} alt="Preview" className="w-16 h-16 object-cover rounded mt-2" />
-              )}
-            </div>
+            <button
+              onClick={() => { onChange({ url: '' }); setFileData(null) }}
+              className="px-4 py-2 text-sm text-red-600 bg-white rounded-lg hover:bg-red-50 transition-colors"
+            >
+              移除
+            </button>
           </div>
-          <button
-            onClick={() => { onChange(''); setPreview(null) }}
-            className="px-4 py-2 text-sm text-red-600 bg-white rounded-lg hover:bg-red-50 transition-colors"
-          >
-            移除
-          </button>
+
+          {isImage && data?.url && (
+            <div className="bg-white rounded-lg p-3">
+              <img 
+                src={data.url} 
+                alt="Preview" 
+                className="max-w-full max-h-64 object-contain rounded" 
+              />
+            </div>
+          )}
+
+          {data?.url && (
+            <div className="bg-white rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 mb-1">文件链接</p>
+                  <p className="text-sm text-gray-800 truncate bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                    {data.url}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCopyUrl}
+                  className="px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex-shrink-0"
+                >
+                  {copied ? '已复制!' : '复制链接'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
