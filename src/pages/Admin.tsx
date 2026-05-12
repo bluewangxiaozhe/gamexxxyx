@@ -830,9 +830,9 @@ export default function Admin() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex-shrink-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">
                   {editingGame ? '编辑游戏' : '添加游戏'}
                 </h2>
@@ -844,7 +844,8 @@ export default function Admin() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-5">
                 {message && (
                   <div className={`p-3 rounded-lg text-sm ${
                     message.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
@@ -1021,8 +1022,11 @@ export default function Admin() {
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-2">
+                </div>
+              </div>
+              {/* Footer - Fixed */}
+              <div className="flex-shrink-0 border-t border-gray-100 px-6 py-4">
+                <div className="flex gap-3">
                   <button
                     onClick={closeModal}
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
