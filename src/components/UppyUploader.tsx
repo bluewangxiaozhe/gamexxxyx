@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 
@@ -46,8 +47,10 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
   const config = TYPE_CONFIG[type]
 
   useEffect(() => {
-    if (value) {
+    if (value && value.url) {
       setFileData(value)
+    } else if (!value || !value.url) {
+      setFileData(null)
     }
   }, [value])
 
@@ -127,7 +130,12 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
     }
   }
 
-  if (value || fileData) {
+  const handleRemove = () => {
+    setFileData(null)
+    onChange({ url: '' })
+  }
+
+  if ((value && value.url) || (fileData && fileData.url)) {
     const data = value || fileData
     const isImage = type !== 'game' && data?.url?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i)
 
@@ -150,7 +158,7 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
               </div>
             </div>
             <button
-              onClick={() => { onChange({ url: '' }); setFileData(null) }}
+              onClick={handleRemove}
               className="px-4 py-2 text-sm text-red-600 bg-white rounded-lg hover:bg-red-50 transition-colors"
             >
               移除
@@ -159,10 +167,10 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
 
           {isImage && data?.url && (
             <div className="bg-white rounded-lg p-3">
-              <img 
-                src={data.url} 
-                alt="Preview" 
-                className="max-w-full max-h-64 object-contain rounded" 
+              <img
+                src={data.url}
+                alt="Preview"
+                className="max-w-full max-h-64 object-contain rounded"
               />
             </div>
           )}
