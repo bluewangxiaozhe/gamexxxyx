@@ -1,3 +1,4 @@
+
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft } from 'lucide-react'
@@ -95,9 +96,7 @@ function formatSizeForDisplay(bytes: number): string {
 }
 
 function getNameFromFilename(filename: string): string {
-  // 移除扩展名
   const nameWithoutExt = filename.replace(/\.[^/.]+$/, '')
-  // 替换下划线、连字符等为空格
   return nameWithoutExt.replace(/[-_]+/g, ' ').trim()
 }
 
@@ -157,21 +156,18 @@ export default function Admin() {
   const [error, setError] = useState('')
   const { games, loading, refetch } = useGames()
 
-  // 排序：active(上架) > maintenance(维护) > inactive(下架)
   const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
   const sortedGames = [...games].sort((a, b) => {
     const orderDiff = (statusOrder[a.status || 'inactive'] || 4) - (statusOrder[b.status || 'inactive'] || 4)
     return orderDiff !== 0 ? orderDiff : 0
   })
 
-  // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [form, setForm] = useState<GameForm>(createEmptyForm())
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Banner 管理状态
   const [banners, setBanners] = useState<BannerConfig[]>(loadBanners)
   const [bannerTab, setBannerTab] = useState(false)
   const [editingBanner, setEditingBanner] = useState<BannerConfig | null>(null)
@@ -203,6 +199,10 @@ export default function Admin() {
   }
 
   const openEdit = (game: Game) => {
+    console.log('DEBUG: 编辑按钮被点击', game)
+    console.log('DEBUG: game.id =', game.id)
+    console.log('DEBUG: game.name =', game.name)
+    alert(`调试: 点击了编辑按钮\n游戏名称: ${game.name}\n游戏ID: ${game.id}`)
     setEditingGame(game)
     setForm(gameToForm(game))
     setIsModalOpen(true)
@@ -216,7 +216,6 @@ export default function Admin() {
     setMessage('')
   }
 
-  // Banner 管理函数
   const openAddBanner = () => {
     setEditingBanner(null)
     setBannerForm({ ...defaultBanners[0], id: Date.now(), title: '', subtitle: '', desc: '', image: '' })
@@ -266,12 +265,10 @@ export default function Admin() {
       downloadUrl: data.url 
     }
     
-    // 如果游戏名称为空且有文件名，则自动填充
     if (!form.name.trim() && data.filename) {
       newForm.name = getNameFromFilename(data.filename)
     }
     
-    // 如果文件大小为空且有文件大小，则自动填充
     if (!form.size.trim() && data.size) {
       newForm.size = formatSizeForDisplay(data.size)
     }
@@ -720,14 +717,14 @@ export default function Admin() {
                         <div className="flex justify-end gap-1">
                           <button
                             onClick={() => openEdit(game)}
-                            className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors"
+                            className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
                             title="编辑"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(game)}
-                            className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                            className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
                             title="删除"
                           >
                             <Trash2 className="w-4 h-4" />
