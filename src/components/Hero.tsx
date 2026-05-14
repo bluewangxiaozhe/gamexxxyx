@@ -21,6 +21,15 @@ interface Announcement {
   visible: boolean
 }
 
+const defaultAnnouncements: Announcement[] = [
+  {
+    id: 1,
+    title: '欢迎来到小小小游戏盒子',
+    content: '每天更新精品游戏，享受畅快体验',
+    visible: true,
+  },
+]
+
 function loadAnnouncements(): Announcement[] {
   try {
     const saved = localStorage.getItem('announcements')
@@ -31,7 +40,7 @@ function loadAnnouncements(): Announcement[] {
       }
     }
   } catch (e) { /* ignore */ }
-  return []
+  return defaultAnnouncements.filter(a => a.visible)
 }
 
 const defaultBanners: Banner[] = [
@@ -120,7 +129,7 @@ export default function Hero() {
       {/* 滚动公告栏 */}
       {announcements.length > 0 && (
         <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
-          <div className="container-custom">
+          <div className="max-w-7xl mx-auto px-4">
             <div className="flex items-center justify-center gap-2 py-2 text-sm">
               <Bell className="w-4 h-4 flex-shrink-0" />
               <AnimatePresence mode="wait">
