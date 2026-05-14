@@ -253,6 +253,8 @@ export default function Admin() {
   }
 
   const openEdit = (game: Game) => {
+    setBannerTab(false)
+    setAnnouncementTab(false)
     setEditingGame(game)
     setForm(gameToForm(game))
     setShowGameForm(true)
