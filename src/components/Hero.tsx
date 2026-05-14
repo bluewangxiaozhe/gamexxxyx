@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, Bell, ExternalLink, X } from 'lucide-react'
+import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, Bell, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 
