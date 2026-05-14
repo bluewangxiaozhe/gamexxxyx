@@ -161,7 +161,7 @@ function gameToForm(game: Game): GameForm {
     rating: game.rating,
     downloads: game.downloads,
     status: game.status || 'active',
-    tags: game.tags?.join(', ') || '',
+    tags: Array.isArray(game.tags) ? game.tags.join(', ') : (game.tags || ''),
   }
 }
 
