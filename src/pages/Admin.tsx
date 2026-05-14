@@ -195,11 +195,11 @@ export default function Admin() {
     return orderDiff !== 0 ? orderDiff : 0
   })
 
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [form, setForm] = useState<GameForm>(createEmptyForm())
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [showGameForm, setShowGameForm] = useState(false)
 
   const [banners, setBanners] = useState<BannerConfig[]>(loadBanners)
   const [bannerTab, setBannerTab] = useState(false)
@@ -231,22 +231,15 @@ export default function Admin() {
     setPassword('')
   }
 
-  const openAdd = () => {
-    setEditingGame(null)
-    setForm(createEmptyForm())
-    setIsModalOpen(true)
-    setMessage('')
-  }
-
   const openEdit = (game: Game) => {
     setEditingGame(game)
     setForm(gameToForm(game))
-    setIsModalOpen(true)
+    setShowGameForm(true)
     setMessage('')
   }
 
-  const closeModal = () => {
-    setIsModalOpen(false)
+  const closeGameForm = () => {
+    setShowGameForm(false)
     setEditingGame(null)
     setForm(createEmptyForm())
     setMessage('')
@@ -383,7 +376,7 @@ export default function Admin() {
       if (response.success) {
         setMessage(editingGame ? '修改成功！' : '添加成功！')
         await refetch()
-        setTimeout(() => closeModal(), 800)
+        setTimeout(() => closeGameForm(), 800)
       } else {
         setMessage(response.message || '保存失败')
       }
@@ -482,11 +475,11 @@ export default function Admin() {
               导出JSON
             </button>
             <button
-              onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => { setShowGameForm(!showGameForm); setEditingGame(null); setForm(createEmptyForm()); setMessage(''); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showGameForm && !editingGame ? 'bg-blue-700 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
             >
               <Plus className="w-4 h-4" />
-              添加游戏
+              {showGameForm && !editingGame ? '取消添加' : '添加游戏'}
             </button>
             <button
               onClick={() => { setBannerTab(!bannerTab); setAnnouncementTab(false); }}
@@ -863,6 +856,229 @@ export default function Admin() {
         {/* 游戏管理内容（仅在非 Banner/公告 标签时显示） */}
         {!bannerTab && !announcementTab && (
           <>
+        {/* 游戏添加/编辑表单 */}
+        {showGameForm && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl border border-gray-100 p-6 mb-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                {editingGame ? '编辑游戏' : '添加游戏'}
+              </h3>
+              <button
+                onClick={closeGameForm}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {message && (
+              <div className={`p-4 rounded-xl text-sm mb-6 ${
+                message.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}>
+                {message}
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-5">
+              {/* Name */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  游戏名称 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="例如：复古传奇"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">分类</label>
+                <select
+                  value={form.category}
+                  onChange={e => setForm({ ...form, category: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
+                >
+                  {CATEGORY_OPTIONS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                <select
+                  value={form.status}
+                  onChange={e => setForm({ ...form, status: e.target.value as any })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
+                >
+                  <option value="active">上架</option>
+                  <option value="inactive">下架</option>
+                  <option value="maintenance">维护</option>
+                </select>
+              </div>
+
+              {/* Version */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">版本</label>
+                <input
+                  type="text"
+                  value={form.version}
+                  onChange={e => setForm({ ...form, version: e.target.value })}
+                  placeholder="1.0.0"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Size */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">大小</label>
+                <input
+                  type="text"
+                  value={form.size}
+                  onChange={e => setForm({ ...form, size: e.target.value })}
+                  placeholder="例如：500MB"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Rating */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">评分 (0-10)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  value={form.rating}
+                  onChange={e => setForm({ ...form, rating: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Downloads */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">下载量</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.downloads}
+                  onChange={e => setForm({ ...form, downloads: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Download File */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  游戏文件 <span className="text-red-500">*</span>
+                </label>
+                <UppyUploader 
+                  type="game" 
+                  value={{ url: form.downloadUrl }} 
+                  onChange={handleGameFileUpload} 
+                />
+              </div>
+
+              {/* Cover Image */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  封面图片
+                </label>
+                <UppyUploader 
+                  type="cover" 
+                  value={{ url: form.imageUrl }} 
+                  onChange={handleCoverUpload} 
+                />
+              </div>
+
+              {/* Tags */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  标签 <span className="text-gray-400 font-normal">（用逗号分隔）</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.tags}
+                  onChange={e => setForm({ ...form, tags: e.target.value })}
+                  placeholder="热血, PK, 打金"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">描述</label>
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="简短描述游戏特色..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+                />
+              </div>
+            </div>
+
+            {/* Preview */}
+            {form.name && (
+              <div className="mt-6 p-5 bg-gray-50 rounded-xl">
+                <span className="text-sm font-medium text-gray-700 mb-4 block">预览</span>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                    {form.imageUrl ? (
+                      <img src={form.imageUrl} alt={form.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-2xl font-bold">
+                        {form.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900 text-lg">{form.name}</div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-sm text-gray-600 bg-white px-2 py-0.5 rounded">{form.category}</span>
+                      <span className="text-sm text-gray-400">·</span>
+                      <span className="text-sm text-gray-500">v{form.version}</span>
+                      {form.tags && (
+                        <>
+                          <span className="text-sm text-gray-400">·</span>
+                          <span className="text-sm text-gray-500">{form.tags}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-100">
+              <button
+                onClick={closeGameForm}
+                className="flex-1 px-5 py-3 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors font-medium text-gray-700"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+              >
+                <Save className="w-5 h-5" />
+                {saving ? '保存中...' : editingGame ? '保存修改' : '添加游戏'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Stats */}
         <div className="grid sm:grid-cols-3 gap-6 mb-10">
           <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -1051,246 +1267,6 @@ export default function Admin() {
         </>
         )}
       </div>
-
-      {/* Add/Edit Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={(e) => e.target === e.currentTarget && closeModal()}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
-            >
-              <div className="flex-shrink-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingGame ? '编辑游戏' : '添加游戏'}
-                </h2>
-                <button
-                  onClick={closeModal}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-6 space-y-6">
-                {message && (
-                  <div className={`p-4 rounded-xl text-sm ${
-                    message.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                  }`}>
-                    {message}
-                  </div>
-                )}
-
-                <div className="grid sm:grid-cols-2 gap-5">
-                  {/* Name */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      游戏名称 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={e => setForm({ ...form, name: e.target.value })}
-                      placeholder="例如：复古传奇"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">分类</label>
-                    <select
-                      value={form.category}
-                      onChange={e => setForm({ ...form, category: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
-                    >
-                      {CATEGORY_OPTIONS.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
-                    <select
-                      value={form.status}
-                      onChange={e => setForm({ ...form, status: e.target.value as any })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
-                    >
-                      <option value="active">上架</option>
-                      <option value="inactive">下架</option>
-                      <option value="maintenance">维护</option>
-                    </select>
-                  </div>
-
-                  {/* Version */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">版本</label>
-                    <input
-                      type="text"
-                      value={form.version}
-                      onChange={e => setForm({ ...form, version: e.target.value })}
-                      placeholder="1.0.0"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Size */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">大小</label>
-                    <input
-                      type="text"
-                      value={form.size}
-                      onChange={e => setForm({ ...form, size: e.target.value })}
-                      placeholder="例如：500MB"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Rating */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">评分 (0-10)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={form.rating}
-                      onChange={e => setForm({ ...form, rating: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Downloads */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">下载量</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.downloads}
-                      onChange={e => setForm({ ...form, downloads: parseInt(e.target.value) || 0 })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Download File */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      游戏文件 <span className="text-red-500">*</span>
-                    </label>
-                    <UppyUploader 
-                      type="game" 
-                      value={{ url: form.downloadUrl }} 
-                      onChange={handleGameFileUpload} 
-                    />
-                  </div>
-
-                  {/* Cover Image */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      封面图片
-                    </label>
-                    <UppyUploader 
-                      type="cover" 
-                      value={{ url: form.imageUrl }} 
-                      onChange={handleCoverUpload} 
-                    />
-                  </div>
-
-                  {/* Tags */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      标签 <span className="text-gray-400 font-normal">（用逗号分隔）</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.tags}
-                      onChange={e => setForm({ ...form, tags: e.target.value })}
-                      placeholder="热血, PK, 打金"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">描述</label>
-                    <textarea
-                      value={form.description}
-                      onChange={e => setForm({ ...form, description: e.target.value })}
-                      placeholder="简短描述游戏特色..."
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
-                    />
-                  </div>
-                </div>
-
-                {/* Preview */}
-                {form.name && (
-                  <div className="p-5 bg-gray-50 rounded-xl">
-                    <span className="text-sm font-medium text-gray-700 mb-4 block">预览</span>
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                        {form.imageUrl ? (
-                          <img src={form.imageUrl} alt={form.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-2xl font-bold">
-                            {form.name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 text-lg">{form.name}</div>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-sm text-gray-600 bg-white px-2 py-0.5 rounded">{form.category}</span>
-                          <span className="text-sm text-gray-400">·</span>
-                          <span className="text-sm text-gray-500">v{form.version}</span>
-                          {form.tags && (
-                            <>
-                              <span className="text-sm text-gray-400">·</span>
-                              <span className="text-sm text-gray-500">{form.tags}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                </div>
-              </div>
-              {/* Footer - Fixed */}
-              <div className="flex-shrink-0 border-t border-gray-100 px-6 py-5 bg-gray-50/50">
-                <div className="flex gap-3">
-                  <button
-                    onClick={closeModal}
-                    className="flex-1 px-5 py-3 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors font-medium text-gray-700"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
-                  >
-                    <Save className="w-5 h-5" />
-                    {saving ? '保存中...' : editingGame ? '保存修改' : '添加游戏'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
