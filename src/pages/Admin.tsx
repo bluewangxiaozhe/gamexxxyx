@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api } from '@/utils/api'
@@ -33,8 +33,8 @@ const defaultBanners: BannerConfig[] = [
     subtitle: '独家版本，专属神器',
     desc: '全新沉默版本，专属装备系统，打造属于你的传奇之路',
     image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&h=600&fit=crop',
-    color: 'from-purple-500 to-indigo-600',
-    bgColor: 'bg-purple-50',
+    color: 'from-cyan-500 to-blue-600',
+    bgColor: 'bg-cyan-50',
   },
   {
     id: 3,
@@ -42,7 +42,7 @@ const defaultBanners: BannerConfig[] = [
     subtitle: '一刀999，爽到飞起',
     desc: '单职业超变版本，超高爆率，装备全靠打，散人也能当大佬',
     image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&h=600&fit=crop',
-    color: 'from-red-500 to-pink-600',
+    color: 'from-red-500 to-orange-600',
     bgColor: 'bg-red-50',
   },
 ]
@@ -214,6 +214,27 @@ export default function Admin() {
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementConfig>({ id: 0, title: '', content: '', link: '', visible: true })
   const [announcementMessage, setAnnouncementMessage] = useState('')
 
+  // 自定义确认对话框状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} })
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmDialog({ isOpen: true, title, message, onConfirm })
+  }
+
+  const handleConfirm = () => {
+    confirmDialog.onConfirm()
+    setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => {} })
+  }
+
+  const handleCancelConfirm = () => {
+    setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => {} })
+  }
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
@@ -272,10 +293,11 @@ export default function Admin() {
   }
 
   const handleDeleteBanner = (id: number) => {
-    if (!confirm('确定删除这个 Banner 吗？')) return
-    const newBanners = banners.filter(b => b.id !== id)
-    setBanners(newBanners)
-    saveBanners(newBanners)
+    showConfirm('删除 Banner', '确定删除这个 Banner 吗？此操作不可恢复。', () => {
+      const newBanners = banners.filter(b => b.id !== id)
+      setBanners(newBanners)
+      saveBanners(newBanners)
+    })
   }
 
   const handleMoveBanner = (index: number, direction: 'up' | 'down') => {
@@ -316,10 +338,11 @@ export default function Admin() {
   }
 
   const handleDeleteAnnouncement = (id: number) => {
-    if (!confirm('确定删除这条公告吗？')) return
-    const newAnnouncements = announcements.filter(a => a.id !== id)
-    setAnnouncements(newAnnouncements)
-    saveAnnouncements(newAnnouncements)
+    showConfirm('删除公告', '确定删除这条公告吗？此操作不可恢复。', () => {
+      const newAnnouncements = announcements.filter(a => a.id !== id)
+      setAnnouncements(newAnnouncements)
+      saveAnnouncements(newAnnouncements)
+    })
   }
 
   const handleToggleAnnouncement = (announcement: AnnouncementConfig) => {
@@ -388,14 +411,14 @@ export default function Admin() {
   }
 
   const handleDelete = async (game: Game) => {
-    if (!confirm(`确定要删除「${game.name}」吗？此操作不可恢复。`)) return
-
-    const response = await api.deleteGame(game.id)
-    if (response.success) {
-      await refetch()
-    } else {
-      alert(response.message || '删除失败')
-    }
+    showConfirm('删除游戏', `确定要删除「${game.name}」吗？此操作不可恢复。`, async () => {
+      const response = await api.deleteGame(game.id)
+      if (response.success) {
+        await refetch()
+      } else {
+        alert(response.message || '删除失败')
+      }
+    })
   }
 
   const exportJSON = () => {
@@ -459,6 +482,34 @@ export default function Admin() {
 
   return (
     <div className="py-12">
+      {/* 自定义确认对话框 */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl"
+          >
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-gray-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelConfirm}
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium text-gray-700"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium"
+              >
+                确认删除
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10">
@@ -483,7 +534,7 @@ export default function Admin() {
             </button>
             <button
               onClick={() => { setBannerTab(!bannerTab); setAnnouncementTab(false); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${bannerTab ? 'bg-purple-600 text-white' : 'border border-gray-200 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${bannerTab ? 'bg-amber-600 text-white' : 'border border-gray-200 hover:bg-gray-50'}`}
             >
               <Image className="w-4 h-4" />
               {bannerTab ? '返回游戏' : 'Banner管理'}
@@ -513,9 +564,9 @@ export default function Admin() {
           >
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">首页 Banner 管理</h2>
-              <button
+                <button
                 onClick={openAddBanner}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 添加 Banner
@@ -602,7 +653,7 @@ export default function Admin() {
                       value={bannerForm.title}
                       onChange={e => setBannerForm({ ...bannerForm, title: e.target.value })}
                       placeholder="如：复古传奇"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                   <div>
@@ -612,7 +663,7 @@ export default function Admin() {
                       value={bannerForm.subtitle}
                       onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
                       placeholder="如：经典再现，热血重燃"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -622,7 +673,7 @@ export default function Admin() {
                       value={bannerForm.desc}
                       onChange={e => setBannerForm({ ...bannerForm, desc: e.target.value })}
                       placeholder="简短描述..."
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -632,7 +683,7 @@ export default function Admin() {
                       value={bannerForm.image}
                       onChange={e => setBannerForm({ ...bannerForm, image: e.target.value })}
                       placeholder="https://example.com/banner.jpg"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                     <p className="text-xs text-gray-400 mt-1">支持任意网络图片地址，建议尺寸 800x600</p>
                   </div>
@@ -641,13 +692,13 @@ export default function Admin() {
                     <select
                       value={bannerForm.color}
                       onChange={e => setBannerForm({ ...bannerForm, color: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="from-amber-500 to-orange-600">琥珀/橙色</option>
-                      <option value="from-purple-500 to-indigo-600">紫色/靛蓝</option>
-                      <option value="from-red-500 to-pink-600">红色/粉色</option>
+                      <option value="from-cyan-500 to-blue-600">青色/蓝色</option>
+                      <option value="from-red-500 to-orange-600">红色/橙色</option>
                       <option value="from-blue-500 to-cyan-600">蓝色/青色</option>
-                      <option value="from-green-500 to-emerald-600">绿色/翠绿</option>
+                      <option value="from-emerald-500 to-teal-600">翠绿/蓝绿</option>
                       <option value="from-gray-500 to-slate-600">灰色/石板</option>
                     </select>
                   </div>
@@ -656,13 +707,13 @@ export default function Admin() {
                     <select
                       value={bannerForm.bgColor}
                       onChange={e => setBannerForm({ ...bannerForm, bgColor: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="bg-amber-50">琥珀 50</option>
-                      <option value="bg-purple-50">紫色 50</option>
+                      <option value="bg-cyan-50">青色 50</option>
                       <option value="bg-red-50">红色 50</option>
                       <option value="bg-blue-50">蓝色 50</option>
-                      <option value="bg-green-50">绿色 50</option>
+                      <option value="bg-emerald-50">翠绿 50</option>
                       <option value="bg-gray-50">灰色 50</option>
                     </select>
                   </div>
@@ -684,7 +735,7 @@ export default function Admin() {
                   </button>
                   <button
                     onClick={handleSaveBanner}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
                   >
                     <Save className="w-4 h-4" />
                     保存 Banner
@@ -1105,8 +1156,8 @@ export default function Admin() {
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <Tag className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-amber-50 rounded-lg">
+                <Tag className="w-6 h-6 text-amber-600" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">上架中</p>
@@ -1199,13 +1250,11 @@ export default function Admin() {
 
         {/* Mobile Cards */}
         <div className="md:hidden space-y-3">
-          <AnimatePresence>
-            {sortedGames.map((game) => (
+          {sortedGames.map((game) => (
               <motion.div
                 key={game.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="bg-white rounded-xl p-4 border border-gray-100"
               >
                 <div className="flex items-center gap-3">
@@ -1255,7 +1304,6 @@ export default function Admin() {
                 </div>
               </motion.div>
             ))}
-          </AnimatePresence>
 
           {games.length === 0 && !loading && (
             <div className="text-center py-16 text-gray-400 bg-white rounded-xl border border-gray-100">
