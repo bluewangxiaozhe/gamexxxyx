@@ -30,7 +30,7 @@ function loadAnnouncements(): Announcement[] {
         return parsed.filter((a: Announcement) => a.visible)
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) { /* ignore */ }
   return []
 }
 
@@ -81,6 +81,7 @@ export default function Hero() {
   const [currentBanner, setCurrentBanner] = useState(0)
   const [banners] = useState<Banner[]>(loadBanners)
   const [announcements] = useState<Announcement[]>(loadAnnouncements)
+  const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const navigate = useNavigate()
 
   const nextBanner = useCallback(() => {
@@ -90,6 +91,15 @@ export default function Hero() {
   const prevBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
   }, [])
+
+  // 公告自动滚动
+  useEffect(() => {
+    if (announcements.length <= 1) return
+    const timer = setInterval(() => {
+      setCurrentAnnouncement((prev) => (prev + 1) % announcements.length)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [announcements.length])
 
   useEffect(() => {
     const timer = setInterval(nextBanner, 5000)
@@ -115,17 +125,17 @@ export default function Hero() {
               <Bell className="w-4 h-4 flex-shrink-0" />
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={announcements[0].id}
+                  key={announcements[currentAnnouncement].id}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   className="flex items-center gap-2"
                 >
-                  <span className="font-medium">{announcements[0].title}:</span>
-                  <span>{announcements[0].content}</span>
-                  {announcements[0].link && (
+                  <span className="font-medium">{announcements[currentAnnouncement].title}:</span>
+                  <span>{announcements[currentAnnouncement].content}</span>
+                  {announcements[currentAnnouncement].link && (
                     <a
-                      href={announcements[0].link}
+                      href={announcements[currentAnnouncement].link}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 hover:underline"
