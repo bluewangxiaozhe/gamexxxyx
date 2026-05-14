@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, Bell, ExternalLink, X } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 
@@ -11,6 +11,27 @@ interface Banner {
   image: string
   color: string
   bgColor: string
+}
+
+interface Announcement {
+  id: number
+  title: string
+  content: string
+  link?: string
+  visible: boolean
+}
+
+function loadAnnouncements(): Announcement[] {
+  try {
+    const saved = localStorage.getItem('announcements')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((a: Announcement) => a.visible)
+      }
+    }
+  } catch { /* ignore */ }
+  return []
 }
 
 const defaultBanners: Banner[] = [
@@ -59,6 +80,7 @@ export default function Hero() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
   const [banners] = useState<Banner[]>(loadBanners)
+  const [announcements] = useState<Announcement[]>(loadAnnouncements)
   const navigate = useNavigate()
 
   const nextBanner = useCallback(() => {
@@ -84,7 +106,41 @@ export default function Hero() {
   const banner = banners[currentBanner]
 
   return (
-    <section className="relative overflow-hidden min-h-[85vh] flex items-center">
+    <section className="relative overflow-hidden min-h-[85vh] flex items-center pt-8">
+      {/* 滚动公告栏 */}
+      {announcements.length > 0 && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
+          <div className="container-custom">
+            <div className="flex items-center justify-center gap-2 py-2 text-sm">
+              <Bell className="w-4 h-4 flex-shrink-0" />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={announcements[0].id}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="flex items-center gap-2"
+                >
+                  <span className="font-medium">{announcements[0].title}:</span>
+                  <span>{announcements[0].content}</span>
+                  {announcements[0].link && (
+                    <a
+                      href={announcements[0].link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 hover:underline"
+                    >
+                      查看详情
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 固定背景色 */}
       <div className="absolute inset-0 bg-gray-50" />
 

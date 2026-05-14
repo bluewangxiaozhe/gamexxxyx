@@ -1,7 +1,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft } from 'lucide-react'
+import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api } from '@/utils/api'
 import type { Game } from '@/types'
@@ -60,6 +60,39 @@ function loadBanners(): BannerConfig[] {
 
 function saveBanners(banners: BannerConfig[]) {
   localStorage.setItem('hero_banners', JSON.stringify(banners))
+}
+
+// 公告管理
+interface AnnouncementConfig {
+  id: number
+  title: string
+  content: string
+  link?: string
+  visible: boolean
+}
+
+const defaultAnnouncements: AnnouncementConfig[] = [
+  {
+    id: 1,
+    title: '欢迎来到小小小游戏盒子',
+    content: '每天更新精品游戏，享受畅快体验',
+    visible: true,
+  },
+]
+
+function loadAnnouncements(): AnnouncementConfig[] {
+  try {
+    const saved = localStorage.getItem('announcements')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch { /* ignore */ }
+  return defaultAnnouncements
+}
+
+function saveAnnouncements(announcements: AnnouncementConfig[]) {
+  localStorage.setItem('announcements', JSON.stringify(announcements))
 }
 
 const ADMIN_KEY = 'admin_auth'
@@ -174,6 +207,13 @@ export default function Admin() {
   const [bannerForm, setBannerForm] = useState<BannerConfig>(defaultBanners[0])
   const [bannerMessage, setBannerMessage] = useState('')
 
+  // 公告管理状态
+  const [announcements, setAnnouncements] = useState<AnnouncementConfig[]>(loadAnnouncements)
+  const [announcementTab, setAnnouncementTab] = useState(false)
+  const [editingAnnouncement, setEditingAnnouncement] = useState<AnnouncementConfig | null>(null)
+  const [announcementForm, setAnnouncementForm] = useState<AnnouncementConfig>({ id: 0, title: '', content: '', link: '', visible: true })
+  const [announcementMessage, setAnnouncementMessage] = useState('')
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
@@ -199,10 +239,6 @@ export default function Admin() {
   }
 
   const openEdit = (game: Game) => {
-    console.log('DEBUG: 编辑按钮被点击', game)
-    console.log('DEBUG: game.id =', game.id)
-    console.log('DEBUG: game.name =', game.name)
-    alert(`调试: 点击了编辑按钮\n游戏名称: ${game.name}\n游戏ID: ${game.id}`)
     setEditingGame(game)
     setForm(gameToForm(game))
     setIsModalOpen(true)
@@ -257,6 +293,47 @@ export default function Admin() {
     ;[newBanners[index], newBanners[targetIndex]] = [newBanners[targetIndex], newBanners[index]]
     setBanners(newBanners)
     saveBanners(newBanners)
+  }
+
+  // 公告管理函数
+  const openAddAnnouncement = () => {
+    setEditingAnnouncement(null)
+    setAnnouncementForm({ id: Date.now(), title: '', content: '', link: '', visible: true })
+    setAnnouncementMessage('')
+  }
+
+  const openEditAnnouncement = (announcement: AnnouncementConfig) => {
+    setEditingAnnouncement(announcement)
+    setAnnouncementForm({ ...announcement })
+    setAnnouncementMessage('')
+  }
+
+  const handleSaveAnnouncement = () => {
+    if (!announcementForm.title.trim() || !announcementForm.content.trim()) {
+      setAnnouncementMessage('请填写标题和内容')
+      return
+    }
+    const newAnnouncements = editingAnnouncement
+      ? announcements.map(a => a.id === editingAnnouncement.id ? { ...announcementForm } : a)
+      : [...announcements, { ...announcementForm, id: Date.now() }]
+    setAnnouncements(newAnnouncements)
+    saveAnnouncements(newAnnouncements)
+    setAnnouncementMessage('保存成功！刷新首页生效')
+    setEditingAnnouncement(null)
+  }
+
+  const handleDeleteAnnouncement = (id: number) => {
+    if (!confirm('确定删除这条公告吗？')) return
+    const newAnnouncements = announcements.filter(a => a.id !== id)
+    setAnnouncements(newAnnouncements)
+    saveAnnouncements(newAnnouncements)
+  }
+
+  const handleToggleAnnouncement = (announcement: AnnouncementConfig) => {
+    const updated = { ...announcement, visible: !announcement.visible }
+    const newAnnouncements = announcements.map(a => a.id === announcement.id ? updated : a)
+    setAnnouncements(newAnnouncements)
+    saveAnnouncements(newAnnouncements)
   }
 
   const handleGameFileUpload = (data: FileData) => {
@@ -412,11 +489,18 @@ export default function Admin() {
               添加游戏
             </button>
             <button
-              onClick={() => setBannerTab(!bannerTab)}
+              onClick={() => { setBannerTab(!bannerTab); setAnnouncementTab(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${bannerTab ? 'bg-purple-600 text-white' : 'border border-gray-200 hover:bg-gray-50'}`}
             >
               <Image className="w-4 h-4" />
               {bannerTab ? '返回游戏' : 'Banner管理'}
+            </button>
+            <button
+              onClick={() => { setAnnouncementTab(!announcementTab); setBannerTab(false); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${announcementTab ? 'bg-orange-600 text-white' : 'border border-gray-200 hover:bg-gray-50'}`}
+            >
+              <Bell className="w-4 h-4" />
+              {announcementTab ? '返回游戏' : '公告管理'}
             </button>
             <button
               onClick={handleLogout}
@@ -618,8 +702,166 @@ export default function Admin() {
           </motion.div>
         )}
 
-        {/* 游戏管理内容（仅在非 Banner 标签时显示） */}
-        {!bannerTab && (
+        {/* 公告管理面板 */}
+        {announcementTab && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">首页滚动公告管理</h2>
+              <button
+                onClick={openAddAnnouncement}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                添加公告
+              </button>
+            </div>
+
+            {announcementMessage && (
+              <div className={`p-3 rounded-lg text-sm ${announcementMessage.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {announcementMessage}
+              </div>
+            )}
+
+            {/* 公告列表 */}
+            <div className="grid gap-4">
+              {announcements.map((announcement) => (
+                <motion.div
+                  key={announcement.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="bg-white rounded-xl border border-gray-100 p-5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className={`p-2 rounded-lg ${announcement.visible ? 'bg-orange-50' : 'bg-gray-100'}`}>
+                        <Bell className={`w-5 h-5 ${announcement.visible ? 'text-orange-600' : 'text-gray-400'}`} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-bold text-gray-900">{announcement.title}</h3>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${announcement.visible ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {announcement.visible ? '显示中' : '已隐藏'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{announcement.content}</p>
+                        {announcement.link && (
+                          <a
+                            href={announcement.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            {announcement.link}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleToggleAnnouncement(announcement)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${announcement.visible ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                      >
+                        {announcement.visible ? '隐藏' : '显示'}
+                      </button>
+                      <button
+                        onClick={() => openEditAnnouncement(announcement)}
+                        className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAnnouncement(announcement.id)}
+                        className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 公告编辑表单 */}
+            {editingAnnouncement !== null && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl border border-gray-100 p-6"
+              >
+                <h3 className="text-lg font-bold text-gray-900 mb-4">
+                  {editingAnnouncement ? '编辑公告' : '添加公告'}
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">公告标题</label>
+                    <input
+                      type="text"
+                      value={announcementForm.title}
+                      onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                      placeholder="例如：重要更新通知"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">公告内容</label>
+                    <textarea
+                      value={announcementForm.content}
+                      onChange={e => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+                      placeholder="公告的具体内容..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">跳转链接 <span className="text-gray-400 font-normal">（可选）</span></label>
+                    <input
+                      type="text"
+                      value={announcementForm.link || ''}
+                      onChange={e => setAnnouncementForm({ ...announcementForm, link: e.target.value })}
+                      placeholder="https://example.com"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                    <select
+                      value={announcementForm.visible ? 'true' : 'false'}
+                      onChange={e => setAnnouncementForm({ ...announcementForm, visible: e.target.value === 'true' })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    >
+                      <option value="true">显示</option>
+                      <option value="false">隐藏</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => { setEditingAnnouncement(null); setAnnouncementForm({ id: 0, title: '', content: '', link: '', visible: true }); }}
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSaveAnnouncement}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    保存公告
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+
+        {/* 游戏管理内容（仅在非 Banner/公告 标签时显示） */}
+        {!bannerTab && !announcementTab && (
           <>
         {/* Stats */}
         <div className="grid sm:grid-cols-3 gap-6 mb-10">

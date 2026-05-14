@@ -20,3 +20,12 @@ export interface ApiResponse<T> {
   data?: T
   message?: string
 }
+
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  link?: string
+  visible: boolean
+  createdAt: string
+}
