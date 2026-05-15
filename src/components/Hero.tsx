@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, Bell, ExternalLink } from 'lucide-react'
+import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 
@@ -91,6 +91,7 @@ export default function Hero() {
   const [banners] = useState<Banner[]>(loadBanners)
   const [announcements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
+  const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
   const navigate = useNavigate()
 
   const nextBanner = useCallback(() => {
@@ -100,6 +101,15 @@ export default function Hero() {
   const prevBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
   }, [])
+
+  // 公告自动隐藏（45秒后渐变消失）
+  useEffect(() => {
+    if (announcements.length === 0) return
+    const timer = setTimeout(() => {
+      setAnnouncementVisible(false)
+    }, 45000) // 45秒后自动隐藏
+    return () => clearTimeout(timer)
+  }, [announcements.length])
 
   // 公告自动滚动
   useEffect(() => {
@@ -126,39 +136,66 @@ export default function Hero() {
 
   return (
     <section className="relative overflow-hidden min-h-[85vh] flex items-center pt-8">
-      {/* 滚动公告栏 */}
-      {announcements.length > 0 && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-center gap-2 py-2 text-sm">
-              <Bell className="w-4 h-4 flex-shrink-0" />
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={announcements[currentAnnouncement].id}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="flex items-center gap-2"
-                >
-                  <span className="font-medium">{announcements[currentAnnouncement].title}:</span>
-                  <span>{announcements[currentAnnouncement].content}</span>
-                  {announcements[currentAnnouncement].link && (
-                    <a
-                      href={announcements[currentAnnouncement].link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 hover:underline"
+      {/* 滚动公告栏 - 弱化背景 + 自动隐藏 */}
+      <AnimatePresence>
+        {announcements.length > 0 && (
+          <motion.div
+            initial={{ opacity: 1, height: 'auto' }}
+            animate={{ opacity: announcementVisible ? 1 : 0, height: announcementVisible ? 'auto' : 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.8, ease: 'easeInOut' }}
+            className="absolute top-0 left-0 right-0 z-50 overflow-hidden"
+          >
+            <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50">
+              <div className="max-w-7xl mx-auto px-4">
+                <div className="flex items-center justify-center gap-2 py-2 text-sm">
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="w-2 h-2 bg-amber-500 rounded-full"
+                  />
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${announcements[currentAnnouncement].id}-${currentAnnouncement}`}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.5 }}
+                      className="flex items-center gap-2 text-gray-700"
                     >
-                      查看详情
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                      <span className="font-medium text-amber-700">{announcements[currentAnnouncement].title}:</span>
+                      <span className="text-gray-600">{announcements[currentAnnouncement].content}</span>
+                      {announcements[currentAnnouncement].link && (
+                        <a
+                          href={announcements[currentAnnouncement].link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 hover:underline"
+                        >
+                          查看详情
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                  {announcements.length > 1 && (
+                    <div className="flex gap-1 ml-2">
+                      {announcements.map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                            i === currentAnnouncement ? 'bg-amber-500' : 'bg-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
                   )}
-                </motion.div>
-              </AnimatePresence>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 固定背景色 */}
       <div className="absolute inset-0 bg-gray-50" />
