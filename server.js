@@ -303,7 +303,16 @@ async function checkFileExists(client, key) {
 }
 
 async function generateUniqueFilename(client, originalName, folder) {
-  let filename = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  let filename = originalName
+    .normalize('NFC')
+    .replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!filename || filename === '.' || filename === '..') {
+    filename = `upload-${Date.now()}`;
+  }
+
   let key = `${folder}/${filename}`;
   let counter = 1;
 
@@ -316,6 +325,11 @@ async function generateUniqueFilename(client, originalName, folder) {
   }
 
   return filename;
+}
+
+function buildPublicUrl(key) {
+  const encodedKey = key.split('/').map(part => encodeURIComponent(part)).join('/');
+  return `${process.env.R2_PUBLIC_URL}/${encodedKey}`;
 }
 
 async function uploadToR2(file, folder) {
@@ -331,7 +345,7 @@ async function uploadToR2(file, folder) {
   }));
 
   return {
-    url: `${process.env.R2_PUBLIC_URL}/${key}`,
+    url: buildPublicUrl(key),
     filename,
     size: file.size,
     path: key,
@@ -353,7 +367,7 @@ async function createPresignedUploadUrl(filename, folder, contentType, expiresIn
     uploadUrl: await getSignedUrl(client, command, { expiresIn }),
     filename: uniqueFilename,
     key,
-    publicUrl: `${process.env.R2_PUBLIC_URL}/${key}`,
+    publicUrl: buildPublicUrl(key),
   };
 }
 

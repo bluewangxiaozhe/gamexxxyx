@@ -177,16 +177,16 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
 
           {data?.url && (
             <div className="bg-white rounded-lg p-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-500 mb-1">文件链接</p>
-                  <p className="text-sm text-gray-800 truncate bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                  <p className="h-10 flex items-center text-sm text-gray-800 truncate bg-gray-50 px-3 rounded border border-gray-200">
                     {data.url}
                   </p>
                 </div>
                 <button
                   onClick={handleCopyUrl}
-                  className="px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex-shrink-0"
+                  className="h-10 px-4 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex-shrink-0 whitespace-nowrap"
                 >
                   {copied ? '已复制!' : '复制链接'}
                 </button>
