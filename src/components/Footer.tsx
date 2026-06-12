@@ -6,17 +6,17 @@ export default function Footer() {
           <div className="flex items-center gap-2">
             <img
               src="/logo.png"
-              alt="小小小游戏盒子"
+              alt="小小小游戏"
               className="w-6 h-6 object-contain"
               onError={(e) => {
                 const target = e.target as HTMLImageElement
                 target.style.display = 'none'
               }}
             />
-            <span className="text-lg font-semibold text-blue-400">小小小游戏盒子</span>
+            <span className="text-lg font-semibold text-blue-400">小小小游戏</span>
           </div>
           <p className="text-sm text-gray-500">
-            © 2026 小小小游戏盒子. All rights reserved.
+            © 2026 小小小游戏. All rights reserved.
           </p>
         </div>
       </div>

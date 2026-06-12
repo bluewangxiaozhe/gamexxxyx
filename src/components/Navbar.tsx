@@ -37,7 +37,7 @@ export default function Navbar() {
           <Link to="/" className="flex items-center gap-2 group">
             <motion.img
               src="./logo.png"
-              alt="小小小游戏盒子"
+              alt="小小小游戏"
               className="w-8 h-8 object-contain"
               whileHover={{ rotate: [0, -10, 10, 0] }}
               transition={{ duration: 0.5 }}
@@ -46,7 +46,7 @@ export default function Navbar() {
                 target.style.display = 'none'
               }}
             />
-            <span className="text-xl font-bold text-blue-400">小小小游戏盒子</span>
+            <span className="text-xl font-bold text-blue-400">小小小游戏</span>
           </Link>
 
           {/* Desktop Nav */}

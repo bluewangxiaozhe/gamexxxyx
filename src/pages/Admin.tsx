@@ -74,7 +74,7 @@ interface AnnouncementConfig {
 const defaultAnnouncements: AnnouncementConfig[] = [
   {
     id: 1,
-    title: '欢迎来到小小小游戏盒子',
+    title: '欢迎来到小小小游戏',
     content: '每天更新精品游戏，享受畅快体验',
     visible: true,
   },

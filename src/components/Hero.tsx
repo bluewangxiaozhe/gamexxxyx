@@ -24,7 +24,7 @@ interface Announcement {
 const defaultAnnouncements: Announcement[] = [
   {
     id: 1,
-    title: '欢迎来到小小小游戏盒子',
+    title: '欢迎来到小小小游戏',
     content: '每天更新精品游戏，享受畅快体验',
     visible: true,
   },
@@ -378,7 +378,7 @@ export default function Hero() {
                 >
                   <div className="text-center">
                     <div className="text-xl font-bold text-green-600">小小小</div>
-                    <div className="text-xs text-gray-500">游戏盒子</div>
+                    <div className="text-xs text-gray-500">小小小游戏</div>
                   </div>
                 </motion.div>
               </motion.div>

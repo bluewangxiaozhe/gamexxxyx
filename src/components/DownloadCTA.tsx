@@ -28,7 +28,7 @@ export default function DownloadCTA() {
               viewport={{ once: true }}
             >
               <h2 className="text-4xl font-bold mb-4">
-                下载 <span className="text-primary-400">小小小游戏盒子</span>
+                下载 <span className="text-primary-400">小小小游戏</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8">
                 Windows 客户端，海量游戏一键下载安装
@@ -75,7 +75,7 @@ export default function DownloadCTA() {
                     <div className="w-3 h-3 rounded-full bg-yellow-500" />
                     <div className="w-3 h-3 rounded-full bg-green-500" />
                   </div>
-                  <span className="text-sm text-gray-400 ml-2">小小小游戏盒子</span>
+                  <span className="text-sm text-gray-400 ml-2">小小小游戏</span>
                 </div>
 
                 {/* 模拟内容 */}
@@ -143,7 +143,7 @@ export default function DownloadCTA() {
             >
               {/* 大标题 + 下载按钮 */}
               <h2 className="text-xl font-bold mb-2">
-                下载 <span className="text-primary-400">小小小游戏盒子</span>
+                下载 <span className="text-primary-400">小小小游戏</span>
               </h2>
               <p className="text-gray-400 text-sm mb-6">海量游戏一键下载安装</p>
               
