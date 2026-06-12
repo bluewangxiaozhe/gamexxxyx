@@ -135,6 +135,14 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
     onChange({ url: '' })
   }
 
+  const formatDisplayUrl = (url: string) => {
+    try {
+      return decodeURI(url)
+    } catch {
+      return url
+    }
+  }
+
   if ((value && value.url) || (fileData && fileData.url)) {
     const data = value || fileData
     const isImage = type !== 'game' && data?.url?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i)
@@ -181,7 +189,7 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-500 mb-1">文件链接</p>
                   <p className="h-10 flex items-center text-sm text-gray-800 truncate bg-gray-50 px-3 rounded border border-gray-200">
-                    {data.url}
+                    {formatDisplayUrl(data.url)}
                   </p>
                 </div>
                 <button

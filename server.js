@@ -302,8 +302,18 @@ async function checkFileExists(client, key) {
   }
 }
 
+function decodeMultipartFilename(originalName) {
+  const decoded = Buffer.from(originalName, 'latin1').toString('utf8');
+
+  if (decoded && !decoded.includes('\uFFFD') && /[\u4e00-\u9fff]/.test(decoded)) {
+    return decoded;
+  }
+
+  return originalName;
+}
+
 async function generateUniqueFilename(client, originalName, folder) {
-  let filename = originalName
+  let filename = decodeMultipartFilename(originalName)
     .normalize('NFC')
     .replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
     .replace(/\s+/g, ' ')
