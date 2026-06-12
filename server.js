@@ -31,6 +31,7 @@ db.exec(`
     size TEXT DEFAULT '',
     downloadUrl TEXT DEFAULT '',
     guideUrl TEXT DEFAULT '',
+    dropRateUrl TEXT DEFAULT '',
     imageUrl TEXT DEFAULT '',
     rating REAL DEFAULT 0,
     downloads INTEGER DEFAULT 0,
@@ -41,6 +42,11 @@ db.exec(`
     updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+const gameColumns = db.prepare('PRAGMA table_info(games)').all().map(column => column.name);
+if (!gameColumns.includes('dropRateUrl')) {
+  db.prepare("ALTER TABLE games ADD COLUMN dropRateUrl TEXT DEFAULT ''").run();
+}
 
 app.use(cors({
   origin(origin, callback) {
@@ -96,6 +102,7 @@ function normalizeGameInput(input, fallback = {}) {
     size: game.size || '',
     downloadUrl: game.downloadUrl || '',
     guideUrl: game.guideUrl || '',
+    dropRateUrl: game.dropRateUrl || '',
     imageUrl: game.imageUrl || '',
     rating: Number(game.rating || 0),
     downloads: Number(game.downloads || 0),
@@ -181,11 +188,11 @@ app.post('/api/games', (req, res) => {
   const result = db.prepare(`
     INSERT INTO games (
       name, description, category, version, size,
-      downloadUrl, guideUrl, imageUrl, rating, downloads,
+      downloadUrl, guideUrl, dropRateUrl, imageUrl, rating, downloads,
       status, tags, screenshots
     ) VALUES (
       @name, @description, @category, @version, @size,
-      @downloadUrl, @guideUrl, @imageUrl, @rating, @downloads,
+      @downloadUrl, @guideUrl, @dropRateUrl, @imageUrl, @rating, @downloads,
       @status, @tags, @screenshots
     )
   `).run(game);
@@ -211,6 +218,7 @@ app.put('/api/games/:id', (req, res) => {
       size = @size,
       downloadUrl = @downloadUrl,
       guideUrl = @guideUrl,
+      dropRateUrl = @dropRateUrl,
       imageUrl = @imageUrl,
       rating = @rating,
       downloads = @downloads,

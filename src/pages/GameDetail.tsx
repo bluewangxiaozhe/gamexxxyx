@@ -1,12 +1,16 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Star, Download, Calendar, Tag } from 'lucide-react'
+import { ArrowLeft, Star, Download, Calendar, Tag, BookOpen, Search } from 'lucide-react'
 import { useGame } from '@/hooks/useGames'
+
+const DEFAULT_DROP_RATE_URL = 'https://blcx.567zm.com/'
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { game, loading, error } = useGame(Number(id))
+  const guideUrl = game?.guideUrl?.trim()
+  const dropRateUrl = game?.dropRateUrl?.trim() || DEFAULT_DROP_RATE_URL
 
   if (loading) {
     return (
@@ -92,6 +96,34 @@ export default function GameDetail() {
                 <Download className="w-5 h-5" />
                 立即下载
               </a>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+                {guideUrl ? (
+                  <a
+                    href={guideUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary w-full gap-2"
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    游戏攻略
+                  </a>
+                ) : (
+                  <span className="btn-secondary w-full gap-2 cursor-not-allowed opacity-50">
+                    <BookOpen className="w-5 h-5" />
+                    游戏攻略
+                  </span>
+                )}
+
+                <a
+                  href={dropRateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary w-full gap-2"
+                >
+                  <Search className="w-5 h-5" />
+                  爆率查询
+                </a>
+              </div>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
