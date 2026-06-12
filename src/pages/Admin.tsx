@@ -107,6 +107,7 @@ interface GameForm {
   version: string
   size: string
   downloadUrl: string
+  guideUrl: string
   imageUrl: string
   rating: number
   downloads: number
@@ -141,6 +142,7 @@ function createEmptyForm(): GameForm {
     version: '1.0.0',
     size: '',
     downloadUrl: '',
+    guideUrl: '',
     imageUrl: '',
     rating: 5.0,
     downloads: 100,
@@ -157,6 +159,7 @@ function gameToForm(game: Game): GameForm {
     version: game.version,
     size: game.size,
     downloadUrl: game.downloadUrl,
+    guideUrl: game.guideUrl || '',
     imageUrl: game.imageUrl,
     rating: game.rating,
     downloads: game.downloads,
@@ -173,6 +176,7 @@ function formToGame(form: GameForm): Omit<Game, 'id' | 'addedAt'> {
     version: form.version.trim(),
     size: form.size.trim(),
     downloadUrl: form.downloadUrl.trim(),
+    guideUrl: form.guideUrl.trim(),
     imageUrl: form.imageUrl.trim(),
     rating: Number(form.rating) || 0,
     downloads: Number(form.downloads) || 0,
@@ -1050,6 +1054,20 @@ export default function Admin() {
                   type="cover" 
                   value={{ url: form.imageUrl }} 
                   onChange={handleCoverUpload} 
+                />
+              </div>
+
+              {/* Guide URL */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  攻略链接
+                </label>
+                <input
+                  type="url"
+                  value={form.guideUrl}
+                  onChange={e => setForm({ ...form, guideUrl: e.target.value })}
+                  placeholder="例如：https://docs.qq.com/doc/..."
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                 />
               </div>
 

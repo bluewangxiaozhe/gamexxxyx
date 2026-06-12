@@ -6,6 +6,7 @@ export interface Game {
   version: string
   size: string
   downloadUrl: string
+  guideUrl?: string
   imageUrl: string
   rating: number
   downloads: number
