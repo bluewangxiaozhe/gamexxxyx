@@ -39,3 +39,4 @@ api-package.json
 
 # 本地临时/打包产物
 .codex-tmp
+.claude
