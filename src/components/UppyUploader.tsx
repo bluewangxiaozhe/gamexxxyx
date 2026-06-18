@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { getAdminToken } from '@/utils/api'
 
 interface FileData {
   url: string
@@ -70,7 +71,8 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
     try {
       const response = await axios.post(`${API_BASE}${endpoint}`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'x-admin-token': getAdminToken()
         },
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {

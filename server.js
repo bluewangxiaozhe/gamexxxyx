@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import multer from 'multer';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
@@ -12,6 +13,11 @@ dotenv.config({ quiet: true });
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DB_PATH = process.env.DB_PATH || '/var/lib/gamexxxyx-api/app.db';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+
+if (!ADMIN_TOKEN) {
+  console.warn('[警告] 未设置 ADMIN_TOKEN，所有写接口（增删改/上传）将返回 503。请在服务端环境变量中配置。');
+}
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
@@ -112,8 +118,40 @@ function normalizeGameInput(input, fallback = {}) {
   };
 }
 
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// 鉴权中间件：保护所有写接口（增删改、上传）。
+// 客户端通过 x-admin-token 头或 Authorization: Bearer <token> 传入令牌。
+function requireAuth(req, res, next) {
+  if (!ADMIN_TOKEN) {
+    res.status(503).json({ success: false, message: '服务端未配置 ADMIN_TOKEN' });
+    return;
+  }
+
+  const authHeader = req.get('authorization') || '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const token = bearer || req.get('x-admin-token') || '';
+
+  if (!token || !timingSafeEqual(token, ADMIN_TOKEN)) {
+    res.status(401).json({ success: false, message: '未授权，请重新登录' });
+    return;
+  }
+
+  next();
+}
+
 app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', db: 'sqlite' });
+});
+
+// 供后台登录校验密码用
+app.get('/api/auth/check', requireAuth, (req, res) => {
+  res.json({ success: true });
 });
 
 app.get('/api/games', (req, res) => {
@@ -178,7 +216,7 @@ app.get('/api/games/:id', (req, res) => {
   res.json(serializeGame(row));
 });
 
-app.post('/api/games', (req, res) => {
+app.post('/api/games', requireAuth, (req, res) => {
   const game = normalizeGameInput(req.body);
   if (!game.name) {
     res.status(400).json({ success: false, message: 'name is required' });
@@ -201,7 +239,7 @@ app.post('/api/games', (req, res) => {
   res.status(201).json(serializeGame(created));
 });
 
-app.put('/api/games/:id', (req, res) => {
+app.put('/api/games/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
   if (!existing) {
     res.status(404).json({ success: false, message: 'Game not found' });
@@ -233,7 +271,7 @@ app.put('/api/games/:id', (req, res) => {
   res.json(serializeGame(updated));
 });
 
-app.delete('/api/games/:id', (req, res) => {
+app.delete('/api/games/:id', requireAuth, (req, res) => {
   const result = db.prepare('DELETE FROM games WHERE id = ?').run(req.params.id);
   res.json({ success: result.changes > 0 });
 });
@@ -393,7 +431,7 @@ function registerUploadRoute(type) {
   const config = uploadConfigs[type];
   const upload = createMulterUpload(config);
 
-  app.post(`/api/upload/${type}`, (req, res) => {
+  app.post(`/api/upload/${type}`, requireAuth, (req, res) => {
     upload.single('file')(req, res, async err => {
       if (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -419,7 +457,7 @@ registerUploadRoute('game');
 registerUploadRoute('cover');
 registerUploadRoute('screenshot');
 
-app.post('/api/upload/presign', async (req, res) => {
+app.post('/api/upload/presign', requireAuth, async (req, res) => {
   try {
     const { filename, type, folder } = req.body || {};
     if (!filename || !type) {

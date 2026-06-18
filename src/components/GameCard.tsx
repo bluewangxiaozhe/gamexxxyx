@@ -2,6 +2,8 @@ import { motion } from 'framer-motion'
 import { Star, Download, ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Game } from '@/types'
+import { useRegion } from '@/hooks/useRegion'
+import { toRegionUrl } from '@/utils/region'
 
 interface GameCardProps {
   game: Game
@@ -9,6 +11,8 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, index = 0 }: GameCardProps) {
+  const region = useRegion()
+  const imageUrl = toRegionUrl(game.imageUrl, region)
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -22,7 +26,7 @@ export default function GameCard({ game, index = 0 }: GameCardProps) {
             {game.imageUrl ? (
               <>
                 <img
-                  src={game.imageUrl}
+                  src={imageUrl}
                   alt={game.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
-import { api } from '@/utils/api'
+import { api, setAdminToken, clearAdminToken, getAdminToken } from '@/utils/api'
 import type { Game } from '@/types'
 import UppyUploader from '@/components/UppyUploader'
 
@@ -94,9 +94,6 @@ function loadAnnouncements(): AnnouncementConfig[] {
 function saveAnnouncements(announcements: AnnouncementConfig[]) {
   localStorage.setItem('announcements', JSON.stringify(announcements))
 }
-
-const ADMIN_KEY = 'admin_auth'
-const ADMIN_PASSWORD = 'Wang147#'
 
 const CATEGORY_OPTIONS = ['单职业', '复古', '微变', '超变', '合击', '沉默', '专属']
 
@@ -190,11 +187,10 @@ function formToGame(form: GameForm): Omit<Game, 'id' | 'addedAt'> {
 }
 
 export default function Admin() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem(ADMIN_KEY) === 'true'
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(() => getAdminToken() !== '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
   const { games, loading, refetch } = useGames()
 
   const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
@@ -243,19 +239,32 @@ export default function Admin() {
     setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => {} })
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(ADMIN_KEY, 'true')
-      setIsAuthenticated(true)
-      setError('')
-    } else {
-      setError('密码错误')
+    if (!password) {
+      setError('请输入密码')
+      return
+    }
+    setLoggingIn(true)
+    setError('')
+    try {
+      const ok = await api.checkAuth(password)
+      if (ok) {
+        setAdminToken(password)
+        setIsAuthenticated(true)
+        setPassword('')
+      } else {
+        setError('密码错误')
+      }
+    } catch {
+      setError('登录失败，请检查网络')
+    } finally {
+      setLoggingIn(false)
     }
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem(ADMIN_KEY)
+    clearAdminToken()
     setIsAuthenticated(false)
     setPassword('')
   }
@@ -474,10 +483,11 @@ export default function Admin() {
               )}
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={loggingIn}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 <LogIn className="w-4 h-4" />
-                登录
+                {loggingIn ? '登录中...' : '登录'}
               </button>
             </form>
           </div>

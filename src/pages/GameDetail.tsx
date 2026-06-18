@@ -2,6 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Star, Download, Calendar, Tag, BookOpen, Search } from 'lucide-react'
 import { useGame } from '@/hooks/useGames'
+import { useRegion } from '@/hooks/useRegion'
+import { toRegionUrl } from '@/utils/region'
 
 const DEFAULT_DROP_RATE_URL = 'https://blcx.567zm.com/'
 
@@ -9,8 +11,11 @@ export default function GameDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { game, loading, error } = useGame(Number(id))
+  const region = useRegion()
   const guideUrl = game?.guideUrl?.trim()
   const dropRateUrl = game?.dropRateUrl?.trim() || DEFAULT_DROP_RATE_URL
+  const imageUrl = game ? toRegionUrl(game.imageUrl, region) : ''
+  const downloadUrl = game ? toRegionUrl(game.downloadUrl, region) : ''
 
   if (loading) {
     return (
@@ -62,7 +67,7 @@ export default function GameDetail() {
             <div className="aspect-video bg-gray-100 rounded-xl overflow-hidden">
               {game.imageUrl ? (
                 <img
-                  src={game.imageUrl}
+                  src={imageUrl}
                   alt={game.name}
                   className="w-full h-full object-cover"
                 />
@@ -88,7 +93,7 @@ export default function GameDetail() {
               </div>
 
               <a
-                href={game.downloadUrl}
+                href={downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary w-full gap-2"

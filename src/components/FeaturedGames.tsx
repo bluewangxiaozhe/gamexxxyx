@@ -3,12 +3,15 @@ import { Flame, ChevronRight, Loader2, ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import type { Game } from '@/types'
+import { useRegion } from '@/hooks/useRegion'
+import { toRegionUrl } from '@/utils/region'
 
 interface FeaturedGamesProps {
   games: Game[]
 }
 
 export default function FeaturedGames({ games }: FeaturedGamesProps) {
+  const region = useRegion()
   const [displayCount, setDisplayCount] = useState(6)
   const featured = games.slice(0, displayCount)
   const hasMore = games.length > displayCount
@@ -48,7 +51,7 @@ export default function FeaturedGames({ games }: FeaturedGamesProps) {
                     {game.imageUrl ? (
                       <>
                         <img
-                          src={game.imageUrl}
+                          src={toRegionUrl(game.imageUrl, region)}
                           alt={game.name}
                           className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500"
                         />

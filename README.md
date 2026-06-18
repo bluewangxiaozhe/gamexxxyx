@@ -12,7 +12,9 @@
 - React 18 + Vite 5 + TypeScript
 - Tailwind CSS + Framer Motion
 - HashRouter（适配 GitHub Pages）
-- MariaDB + Node.js API
+- Node.js + Express + SQLite（better-sqlite3）API
+- 文件存储：Cloudflare R2（S3 兼容）
+- 国内加速：腾讯 EdgeOne CDN（中国大陆访客自动切换）
 
 ## 本地开发
 
@@ -44,11 +46,38 @@ public/
 
 ## 管理后台
 
-访问 `/#/admin`，默认密码：
-- 用户名: `admin`
-- 密码: `找我咨询`
+访问 `/#/admin`，输入管理密码登录。
+
+密码即服务端环境变量 `ADMIN_TOKEN`，登录时由后端 `/api/auth/check` 校验。
+所有写接口（增删改游戏、文件上传）都需要携带该令牌，未授权请求会被后端拒绝（401）。
+**未配置 `ADMIN_TOKEN` 时，后端会拒绝一切写操作（返回 503）。**
+
+## 国内 CDN 加速（线路切换）
+
+文件统一以 R2 原始地址（`oss.wangzhe.me`）存储。前端渲染时通过
+`oss.wangzhe.me/cdn-cgi/trace` 判断访客地区：
+
+- 中国大陆访客：下载链接与图片域名替换为腾讯 EdgeOne 加速域名 `down.567zm.com`
+- 海外访客：保持 R2 原始域名 `oss.wangzhe.me`
+
+域名可通过前端环境变量 `VITE_R2_HOST` / `VITE_CN_HOST` 覆盖。
+后台管理页始终显示 R2 原始地址，不受地区切换影响。
+
+## 服务端部署
+
+后端 API（`server.js` + `api-package.json`）单独部署到服务器，所需环境变量见
+`server.env.example`。关键变量：
+
+- `ADMIN_TOKEN`：后台登录密码 / 写接口令牌（**必填**）
+- `R2_*`：Cloudflare R2 存储配置
+- `CORS_ORIGIN`：允许的前端来源（逗号分隔）
 
 ## 更新日志
+
+### v2.1.0
+- 国内访客自动切换腾讯 EdgeOne CDN 加速线路
+- 后端写接口（增删改 / 上传）加 `ADMIN_TOKEN` 鉴权
+- 清理冗余上传组件
 
 ### v2.0.0
 - 全新现代极简设计
