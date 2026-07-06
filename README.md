@@ -73,6 +73,9 @@ public/
 - `R2_*`：Cloudflare R2 存储配置
 - `CORS_ORIGIN`：允许的前端来源（逗号分隔）
 
+更完整的生产环境、上线、回滚与服务信息见：
+- `[docs/deployment/api-server-production-2026-07-06.md](./docs/deployment/api-server-production-2026-07-06.md)`
+
 ### 2026-07-06 Banner 共享数据源进展
 
 - 新增独立 `hero_banners` 表与 `/api/hero-banners` 读写接口，作为官网首页与客户端 Banner 的共享数据源
