@@ -10,6 +10,7 @@ import UppyUploader from '@/components/UppyUploader'
 function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
   return {
     id: 0,
+    category: '推荐',
     title: '',
     subtitle: '',
     desc: '',
@@ -30,6 +31,7 @@ function normalizeLegacyHeroBanner(raw: any, fallbackSortOrder = 0): HeroBanner 
 
   return {
     id: Number(raw.id) || Date.now() + fallbackSortOrder,
+    category: String(raw.category || '').trim() || '推荐',
     title,
     subtitle: String(raw.subtitle || '').trim(),
     desc: String(raw.desc || '').trim(),
@@ -92,6 +94,7 @@ function saveAnnouncements(announcements: AnnouncementConfig[]) {
 }
 
 const CATEGORY_OPTIONS = ['单职业', '复古', '微变', '超变', '合击', '沉默', '专属']
+const HERO_BANNER_CATEGORY_OPTIONS = ['推荐', '预告', '热门', '上新', '测试']
 
 interface GameForm {
   name: string
@@ -376,6 +379,7 @@ export default function Admin() {
 
     setBannerLoading(true)
     const payload = {
+      category: bannerForm.category.trim() || '推荐',
       title: bannerForm.title.trim(),
       subtitle: bannerForm.subtitle.trim(),
       desc: bannerForm.desc.trim(),
@@ -426,6 +430,7 @@ export default function Admin() {
     const responses = await Promise.all(
       reordered.map(banner =>
         api.updateHeroBanner(banner.id, {
+          category: banner.category,
           title: banner.title,
           subtitle: banner.subtitle,
           desc: banner.desc,
@@ -761,6 +766,9 @@ export default function Admin() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-bold text-gray-900">{banner.title}</h3>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                              {banner.category || '推荐'}
+                            </span>
                             <span className={`text-[11px] px-2 py-0.5 rounded-full ${banner.visible ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                               {banner.visible ? '显示中' : '已隐藏'}
                             </span>
@@ -818,6 +826,18 @@ export default function Admin() {
                   {editingBanner ? '编辑 Banner' : '添加 Banner'}
                 </h3>
                 <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">分类标签</label>
+                    <select
+                      value={bannerForm.category}
+                      onChange={e => setBannerForm({ ...bannerForm, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {HERO_BANNER_CATEGORY_OPTIONS.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">标题</label>
                     <input

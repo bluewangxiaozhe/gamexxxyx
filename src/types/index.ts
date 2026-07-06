@@ -9,6 +9,7 @@ export interface GameBanner {
 
 export interface HeroBanner {
   id: number
+  category: string
   title: string
   subtitle: string
   desc: string

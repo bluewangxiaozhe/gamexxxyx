@@ -55,6 +55,7 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS hero_banners (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT DEFAULT '推荐',
     title TEXT NOT NULL,
     subtitle TEXT DEFAULT '',
     desc TEXT DEFAULT '',
@@ -194,6 +195,7 @@ function normalizeHeroBannerInput(input, fallback = {}) {
   const banner = { ...fallback, ...(input || {}) };
   const parsedSortOrder = Number(banner.sortOrder);
   return {
+    category: String(banner.category || '').trim() || '推荐',
     title: String(banner.title || '').trim(),
     subtitle: String(banner.subtitle || '').trim(),
     desc: String(banner.desc || '').trim(),
@@ -203,6 +205,11 @@ function normalizeHeroBannerInput(input, fallback = {}) {
     sortOrder: Number.isFinite(parsedSortOrder) ? parsedSortOrder : null,
     visible: normalizeBoolean(banner.visible, true) ? 1 : 0,
   };
+}
+
+const heroBannerColumns = db.prepare('PRAGMA table_info(hero_banners)').all().map(column => column.name);
+if (!heroBannerColumns.includes('category')) {
+  db.prepare("ALTER TABLE hero_banners ADD COLUMN category TEXT DEFAULT '推荐'").run();
 }
 
 function serializeGame(row) {
@@ -419,9 +426,9 @@ app.post('/api/hero-banners', requireAuth, (req, res) => {
   const sortOrder = banner.sortOrder ?? getNextHeroBannerSortOrder();
   const result = db.prepare(`
     INSERT INTO hero_banners (
-      title, subtitle, desc, image, color, bgColor, sortOrder, visible
+      category, title, subtitle, desc, image, color, bgColor, sortOrder, visible
     ) VALUES (
-      @title, @subtitle, @desc, @image, @color, @bgColor, @sortOrder, @visible
+      @category, @title, @subtitle, @desc, @image, @color, @bgColor, @sortOrder, @visible
     )
   `).run({ ...banner, sortOrder });
 
@@ -444,6 +451,7 @@ app.put('/api/hero-banners/:id', requireAuth, (req, res) => {
 
   db.prepare(`
     UPDATE hero_banners SET
+      category = @category,
       title = @title,
       subtitle = @subtitle,
       desc = @desc,

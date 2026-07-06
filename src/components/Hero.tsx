@@ -38,6 +38,7 @@ function loadAnnouncements(): Announcement[] {
 const defaultBanners: HeroBanner[] = [
   {
     id: 1,
+    category: '推荐',
     title: '复古传奇',
     subtitle: '经典再现，热血重燃',
     desc: '原汁原味的传奇体验，战法道三职业，沙巴克攻城等你来战',
@@ -49,6 +50,7 @@ const defaultBanners: HeroBanner[] = [
   },
   {
     id: 2,
+    category: '热门',
     title: '沉默专属',
     subtitle: '独家版本，专属神器',
     desc: '全新沉默版本，专属装备系统，打造属于你的传奇之路',
@@ -60,6 +62,7 @@ const defaultBanners: HeroBanner[] = [
   },
   {
     id: 3,
+    category: '上新',
     title: '单职业超变',
     subtitle: '一刀999，爽到飞起',
     desc: '单职业超变版本，超高爆率，装备全靠打，散人也能当大佬',
@@ -80,6 +83,7 @@ function normalizeLegacyHeroBanner(raw: any, fallbackSortOrder = 0): HeroBanner 
 
   return {
     id: Number(raw.id) || fallbackSortOrder + 1,
+    category: String(raw.category || '').trim() || '推荐',
     title,
     subtitle: String(raw.subtitle || '').trim(),
     desc: String(raw.desc || '').trim(),
@@ -114,6 +118,7 @@ function deriveGameBanners(games: Game[]): HeroBanner[] {
     .sort((a, b) => (b.heat || 0) - (a.heat || 0))
     .map((game, index) => ({
       id: game.id || index + 1,
+      category: '热门',
       title: game.banner?.title?.trim() || game.name,
       subtitle: game.banner?.subtitle?.trim() || game.category,
       desc: game.banner?.desc?.trim() || game.description,
@@ -296,11 +301,16 @@ export default function Hero({ games }: HeroProps) {
                 transition={{ duration: 0.5 }}
               >
                 <div className={`inline-block px-3 py-1 rounded-lg text-sm font-bold text-white bg-gradient-to-r ${banner.color} mb-4`}>
-                  {banner.subtitle}
+                  {banner.category || '推荐'}
                 </div>
                 <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
                   {banner.title}
                 </h1>
+                {banner.subtitle && (
+                  <p className="mt-4 text-xl text-gray-700 font-semibold">
+                    {banner.subtitle}
+                  </p>
+                )}
                 <p className="mt-6 text-lg text-gray-600 leading-relaxed max-w-lg">
                   {banner.desc}
                 </p>
