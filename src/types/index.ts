@@ -1,3 +1,26 @@
+export interface GameBanner {
+  title: string
+  subtitle: string
+  desc: string
+  image: string
+  color: string
+  bgColor: string
+}
+
+export interface HeroBanner {
+  id: number
+  title: string
+  subtitle: string
+  desc: string
+  image: string
+  color: string
+  bgColor: string
+  sortOrder: number
+  visible: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface Game {
   id: number
   name: string
@@ -9,9 +32,14 @@ export interface Game {
   guideUrl?: string
   dropRateUrl?: string
   imageUrl: string
+  openTime?: string
+  heat?: number
+  banner?: GameBanner | null
   rating: number
   downloads: number
   addedAt: string
+  createdAt?: string
+  updatedAt?: string
   status?: 'active' | 'inactive' | 'maintenance'
   tags?: string[]
   screenshots?: string[]

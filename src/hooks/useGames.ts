@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Game } from '@/types'
+import type { Game, HeroBanner } from '@/types'
 import { api } from '@/utils/api'
 
 export function useGames() {
@@ -51,4 +51,28 @@ export function useGame(id: number) {
   }, [id])
 
   return { game, loading, error }
+}
+
+export function useHeroBanners(includeHidden = false) {
+  const [heroBanners, setHeroBanners] = useState<HeroBanner[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchHeroBanners = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const response = await api.getHeroBanners(includeHidden)
+    if (response.success && response.data) {
+      setHeroBanners(response.data)
+    } else {
+      setError(response.message || '获取 Banner 列表失败')
+    }
+    setLoading(false)
+  }, [includeHidden])
+
+  useEffect(() => {
+    fetchHeroBanners()
+  }, [fetchHeroBanners])
+
+  return { heroBanners, loading, error, refetch: fetchHeroBanners }
 }

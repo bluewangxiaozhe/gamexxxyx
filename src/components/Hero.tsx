@@ -2,16 +2,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
-
-interface Banner {
-  id: number
-  title: string
-  subtitle: string
-  desc: string
-  image: string
-  color: string
-  bgColor: string
-}
+import type { Game, HeroBanner } from '@/types'
+import { useHeroBanners } from '@/hooks/useGames'
 
 interface Announcement {
   id: number
@@ -43,7 +35,7 @@ function loadAnnouncements(): Announcement[] {
   return defaultAnnouncements.filter(a => a.visible)
 }
 
-const defaultBanners: Banner[] = [
+const defaultBanners: HeroBanner[] = [
   {
     id: 1,
     title: '复古传奇',
@@ -52,6 +44,8 @@ const defaultBanners: Banner[] = [
     image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1600&h=900&fit=crop',
     color: 'from-amber-500 to-orange-600',
     bgColor: 'bg-amber-50',
+    sortOrder: 0,
+    visible: true,
   },
   {
     id: 2,
@@ -61,6 +55,8 @@ const defaultBanners: Banner[] = [
     image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1600&h=900&fit=crop',
     color: 'from-purple-500 to-indigo-600',
     bgColor: 'bg-purple-50',
+    sortOrder: 1,
+    visible: true,
   },
   {
     id: 3,
@@ -70,37 +66,52 @@ const defaultBanners: Banner[] = [
     image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1600&h=900&fit=crop',
     color: 'from-red-500 to-pink-600',
     bgColor: 'bg-red-50',
+    sortOrder: 2,
+    visible: true,
   },
 ]
 
-// 从 localStorage 读取自定义 Banner，如果没有则使用默认
-function loadBanners(): Banner[] {
-  try {
-    const saved = localStorage.getItem('hero_banners')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-  } catch { /* ignore */ }
-  return defaultBanners
+function deriveGameBanners(games: Game[]): HeroBanner[] {
+  return games
+    .filter(game => game.status === 'active' && game.banner)
+    .sort((a, b) => (b.heat || 0) - (a.heat || 0))
+    .map((game, index) => ({
+      id: game.id || index + 1,
+      title: game.banner?.title?.trim() || game.name,
+      subtitle: game.banner?.subtitle?.trim() || game.category,
+      desc: game.banner?.desc?.trim() || game.description,
+      image: game.banner?.image?.trim() || game.imageUrl,
+      color: game.banner?.color?.trim() || 'from-amber-500 to-orange-600',
+      bgColor: game.banner?.bgColor?.trim() || 'bg-amber-50',
+      sortOrder: index,
+      visible: true,
+    }))
+    .filter(banner => banner.title || banner.image)
 }
 
-export default function Hero() {
+interface HeroProps {
+  games: Game[]
+}
+
+export default function Hero({ games }: HeroProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
-  const [banners] = useState<Banner[]>(loadBanners)
   const [announcements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
+  const { heroBanners } = useHeroBanners()
   const navigate = useNavigate()
+
+  const gameBanners = deriveGameBanners(games)
+  const banners = heroBanners.length > 0 ? heroBanners : (gameBanners.length > 0 ? gameBanners : defaultBanners)
 
   const nextBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev + 1) % banners.length)
-  }, [])
+  }, [banners.length])
 
   const prevBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
-  }, [])
+  }, [banners.length])
 
   // 公告自动隐藏（45秒后渐变消失）
   useEffect(() => {
@@ -124,6 +135,12 @@ export default function Hero() {
     const timer = setInterval(nextBanner, 5000)
     return () => clearInterval(timer)
   }, [nextBanner])
+
+  useEffect(() => {
+    if (currentBanner >= banners.length) {
+      setCurrentBanner(0)
+    }
+  }, [banners.length, currentBanner])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

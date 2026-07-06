@@ -1,5 +1,22 @@
 # 更新日志
 
+## [2.2.0] - 2026-07-06
+
+### ✨ 新功能
+- **独立首页 Banner 数据源**：新增 `hero_banners` 表与 `/api/hero-banners` 接口，首页 Banner 不再长期依赖 `games.banner` 或后台本地 `localStorage`
+- **后台 Banner 服务端化**：管理后台的 Banner 管理改为直接调用服务端接口，支持共享给官网首页与后续客户端消费
+- **首页 Hero 共享消费**：首页 `Hero` 优先消费服务端 `hero_banners` 数据，`games.banner` 降级为过渡兜底，默认 Banner 继续保底
+
+### 🧱 数据结构调整
+- `games` 表补齐 `openTime`、`heat`、`banner` 字段，用于首页排序与过渡兼容
+- 新增 `HeroBanner` 类型、`useHeroBanners` Hook 与对应 API 封装
+
+### 🚀 上线记录
+- 生产 API `https://api.567zm.com/api/hero-banners` 已确认可读
+- 生产 `/api/auth/check` 已确认在携带正确 `ADMIN_TOKEN` 时返回成功
+- 本轮停止继续做写接口与页面实点测试，先完成文档、构建与推送
+
+
 ## [2.1.0] - 2026-06-18
 
 ### ✨ 新功能

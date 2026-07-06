@@ -39,6 +39,9 @@ db.exec(`
     guideUrl TEXT DEFAULT '',
     dropRateUrl TEXT DEFAULT '',
     imageUrl TEXT DEFAULT '',
+    openTime TEXT DEFAULT '',
+    heat INTEGER DEFAULT 0,
+    banner TEXT DEFAULT '',
     rating REAL DEFAULT 0,
     downloads INTEGER DEFAULT 0,
     status TEXT DEFAULT 'active',
@@ -49,9 +52,34 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hero_banners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    subtitle TEXT DEFAULT '',
+    desc TEXT DEFAULT '',
+    image TEXT DEFAULT '',
+    color TEXT DEFAULT 'from-amber-500 to-orange-600',
+    bgColor TEXT DEFAULT 'bg-amber-50',
+    sortOrder INTEGER DEFAULT 0,
+    visible INTEGER DEFAULT 1,
+    createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 const gameColumns = db.prepare('PRAGMA table_info(games)').all().map(column => column.name);
 if (!gameColumns.includes('dropRateUrl')) {
   db.prepare("ALTER TABLE games ADD COLUMN dropRateUrl TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('openTime')) {
+  db.prepare("ALTER TABLE games ADD COLUMN openTime TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('heat')) {
+  db.prepare("ALTER TABLE games ADD COLUMN heat INTEGER DEFAULT 0").run();
+}
+if (!gameColumns.includes('banner')) {
+  db.prepare("ALTER TABLE games ADD COLUMN banner TEXT DEFAULT ''").run();
 }
 
 app.use(cors({
@@ -90,11 +118,99 @@ function normalizeJsonArray(value) {
   return '[]';
 }
 
+function normalizeBoolean(value, fallback = true) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+  }
+  return fallback;
+}
+
+function parseBanner(value) {
+  if (!value) return null;
+  if (typeof value === 'object' && value !== null) return normalizeBannerObject(value);
+
+  try {
+    const parsed = JSON.parse(value);
+    return normalizeBannerObject(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBannerObject(value) {
+  if (!value || typeof value !== 'object') return null;
+
+  const banner = {
+    title: String(value.title || '').trim(),
+    subtitle: String(value.subtitle || '').trim(),
+    desc: String(value.desc || '').trim(),
+    image: String(value.image || '').trim(),
+    color: String(value.color || '').trim(),
+    bgColor: String(value.bgColor || '').trim(),
+  };
+
+  if (!banner.title && !banner.subtitle && !banner.desc && !banner.image) {
+    return null;
+  }
+
+  return banner;
+}
+
+function normalizeBannerInput(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      const normalized = normalizeBannerObject(parsed);
+      return normalized ? JSON.stringify(normalized) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  const normalized = normalizeBannerObject(value);
+  return normalized ? JSON.stringify(normalized) : '';
+}
+
+function serializeHeroBanner(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    sortOrder: Number(row.sortOrder || 0),
+    visible: Number(row.visible || 0) !== 0,
+  };
+}
+
+function getNextHeroBannerSortOrder() {
+  const row = db.prepare('SELECT COALESCE(MAX(sortOrder), -1) AS maxSortOrder FROM hero_banners').get();
+  return Number(row?.maxSortOrder ?? -1) + 1;
+}
+
+function normalizeHeroBannerInput(input, fallback = {}) {
+  const banner = { ...fallback, ...(input || {}) };
+  const parsedSortOrder = Number(banner.sortOrder);
+  return {
+    title: String(banner.title || '').trim(),
+    subtitle: String(banner.subtitle || '').trim(),
+    desc: String(banner.desc || '').trim(),
+    image: String(banner.image || '').trim(),
+    color: String(banner.color || '').trim() || 'from-amber-500 to-orange-600',
+    bgColor: String(banner.bgColor || '').trim() || 'bg-amber-50',
+    sortOrder: Number.isFinite(parsedSortOrder) ? parsedSortOrder : null,
+    visible: normalizeBoolean(banner.visible, true) ? 1 : 0,
+  };
+}
+
 function serializeGame(row) {
   return {
     ...row,
     tags: parseJsonArray(row.tags),
     screenshots: parseJsonArray(row.screenshots),
+    banner: parseBanner(row.banner),
   };
 }
 
@@ -110,6 +226,9 @@ function normalizeGameInput(input, fallback = {}) {
     guideUrl: game.guideUrl || '',
     dropRateUrl: game.dropRateUrl || '',
     imageUrl: game.imageUrl || '',
+    openTime: String(game.openTime || '').trim(),
+    heat: Number(game.heat || 0),
+    banner: normalizeBannerInput(game.banner),
     rating: Number(game.rating || 0),
     downloads: Number(game.downloads || 0),
     status: game.status || 'active',
@@ -188,6 +307,17 @@ app.get('/api/categories', (req, res) => {
   res.json(rows.map(row => row.category));
 });
 
+app.get('/api/hero-banners', (req, res) => {
+  const includeHidden = req.query.includeHidden === 'true';
+  const rows = db.prepare(`
+    SELECT * FROM hero_banners
+    ${includeHidden ? '' : 'WHERE visible = 1'}
+    ORDER BY sortOrder ASC, id ASC
+  `).all();
+
+  res.json(rows.map(serializeHeroBanner));
+});
+
 app.get('/api/games/search', (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) {
@@ -226,11 +356,11 @@ app.post('/api/games', requireAuth, (req, res) => {
   const result = db.prepare(`
     INSERT INTO games (
       name, description, category, version, size,
-      downloadUrl, guideUrl, dropRateUrl, imageUrl, rating, downloads,
+      downloadUrl, guideUrl, dropRateUrl, imageUrl, openTime, heat, banner, rating, downloads,
       status, tags, screenshots
     ) VALUES (
       @name, @description, @category, @version, @size,
-      @downloadUrl, @guideUrl, @dropRateUrl, @imageUrl, @rating, @downloads,
+      @downloadUrl, @guideUrl, @dropRateUrl, @imageUrl, @openTime, @heat, @banner, @rating, @downloads,
       @status, @tags, @screenshots
     )
   `).run(game);
@@ -258,6 +388,9 @@ app.put('/api/games/:id', requireAuth, (req, res) => {
       guideUrl = @guideUrl,
       dropRateUrl = @dropRateUrl,
       imageUrl = @imageUrl,
+      openTime = @openTime,
+      heat = @heat,
+      banner = @banner,
       rating = @rating,
       downloads = @downloads,
       status = @status,
@@ -273,6 +406,62 @@ app.put('/api/games/:id', requireAuth, (req, res) => {
 
 app.delete('/api/games/:id', requireAuth, (req, res) => {
   const result = db.prepare('DELETE FROM games WHERE id = ?').run(req.params.id);
+  res.json({ success: result.changes > 0 });
+});
+
+app.post('/api/hero-banners', requireAuth, (req, res) => {
+  const banner = normalizeHeroBannerInput(req.body);
+  if (!banner.title || !banner.image) {
+    res.status(400).json({ success: false, message: 'title and image are required' });
+    return;
+  }
+
+  const sortOrder = banner.sortOrder ?? getNextHeroBannerSortOrder();
+  const result = db.prepare(`
+    INSERT INTO hero_banners (
+      title, subtitle, desc, image, color, bgColor, sortOrder, visible
+    ) VALUES (
+      @title, @subtitle, @desc, @image, @color, @bgColor, @sortOrder, @visible
+    )
+  `).run({ ...banner, sortOrder });
+
+  const created = db.prepare('SELECT * FROM hero_banners WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(serializeHeroBanner(created));
+});
+
+app.put('/api/hero-banners/:id', requireAuth, (req, res) => {
+  const existing = db.prepare('SELECT * FROM hero_banners WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Banner not found' });
+    return;
+  }
+
+  const banner = normalizeHeroBannerInput(req.body, serializeHeroBanner(existing));
+  if (!banner.title || !banner.image) {
+    res.status(400).json({ success: false, message: 'title and image are required' });
+    return;
+  }
+
+  db.prepare(`
+    UPDATE hero_banners SET
+      title = @title,
+      subtitle = @subtitle,
+      desc = @desc,
+      image = @image,
+      color = @color,
+      bgColor = @bgColor,
+      sortOrder = @sortOrder,
+      visible = @visible,
+      updatedAt = CURRENT_TIMESTAMP
+    WHERE id = @id
+  `).run({ id: req.params.id, ...banner });
+
+  const updated = db.prepare('SELECT * FROM hero_banners WHERE id = ?').get(req.params.id);
+  res.json(serializeHeroBanner(updated));
+});
+
+app.delete('/api/hero-banners/:id', requireAuth, (req, res) => {
+  const result = db.prepare('DELETE FROM hero_banners WHERE id = ?').run(req.params.id);
   res.json({ success: result.changes > 0 });
 });
 

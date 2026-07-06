@@ -14,7 +14,12 @@ export default function Home() {
   const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
   const sortedGames = [...games].sort((a, b) => {
     const orderDiff = (statusOrder[a.status || 'inactive'] || 4) - (statusOrder[b.status || 'inactive'] || 4)
-    return orderDiff !== 0 ? orderDiff : 0
+    if (orderDiff !== 0) return orderDiff
+
+    const heatDiff = (b.heat || 0) - (a.heat || 0)
+    if (heatDiff !== 0) return heatDiff
+
+    return b.downloads - a.downloads
   })
 
   const hotGames = sortedGames.slice(0, 8)
@@ -22,7 +27,7 @@ export default function Home() {
   return (
     <div>
       {/* 1. Hero 首屏 + Banner 轮播 */}
-      <Hero />
+      <Hero games={games} />
 
       {/* 2. 分类导航 */}
       <CategoryNav />

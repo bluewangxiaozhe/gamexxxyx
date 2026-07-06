@@ -1,65 +1,24 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api, setAdminToken, clearAdminToken, getAdminToken } from '@/utils/api'
-import type { Game } from '@/types'
+import type { Game, GameBanner, HeroBanner } from '@/types'
 import UppyUploader from '@/components/UppyUploader'
 
-interface BannerConfig {
-  id: number
-  title: string
-  subtitle: string
-  desc: string
-  image: string
-  color: string
-  bgColor: string
-}
-
-const defaultBanners: BannerConfig[] = [
-  {
-    id: 1,
-    title: '复古传奇',
-    subtitle: '经典再现，热血重燃',
-    desc: '原汁原味的传奇体验，战法道三职业，沙巴克攻城等你来战',
-    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&h=600&fit=crop',
+function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
+  return {
+    id: 0,
+    title: '',
+    subtitle: '',
+    desc: '',
+    image: '',
     color: 'from-amber-500 to-orange-600',
     bgColor: 'bg-amber-50',
-  },
-  {
-    id: 2,
-    title: '沉默专属',
-    subtitle: '独家版本，专属神器',
-    desc: '全新沉默版本，专属装备系统，打造属于你的传奇之路',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&h=600&fit=crop',
-    color: 'from-cyan-500 to-blue-600',
-    bgColor: 'bg-cyan-50',
-  },
-  {
-    id: 3,
-    title: '单职业超变',
-    subtitle: '一刀999，爽到飞起',
-    desc: '单职业超变版本，超高爆率，装备全靠打，散人也能当大佬',
-    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&h=600&fit=crop',
-    color: 'from-red-500 to-orange-600',
-    bgColor: 'bg-red-50',
-  },
-]
-
-function loadBanners(): BannerConfig[] {
-  try {
-    const saved = localStorage.getItem('hero_banners')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-  } catch { /* ignore */ }
-  return defaultBanners
-}
-
-function saveBanners(banners: BannerConfig[]) {
-  localStorage.setItem('hero_banners', JSON.stringify(banners))
+    sortOrder,
+    visible: true,
+  }
 }
 
 // 公告管理
@@ -103,10 +62,18 @@ interface GameForm {
   description: string
   version: string
   size: string
+  openTime: string
+  heat: number
   downloadUrl: string
   guideUrl: string
   dropRateUrl: string
   imageUrl: string
+  bannerTitle: string
+  bannerSubtitle: string
+  bannerDesc: string
+  bannerImage: string
+  bannerColor: string
+  bannerBgColor: string
   rating: number
   downloads: number
   status: 'active' | 'inactive' | 'maintenance'
@@ -132,6 +99,23 @@ function getNameFromFilename(filename: string): string {
   return nameWithoutExt.replace(/[-_]+/g, ' ').trim()
 }
 
+function toBannerOrNull(form: GameForm): GameBanner | null {
+  const banner = {
+    title: form.bannerTitle.trim(),
+    subtitle: form.bannerSubtitle.trim(),
+    desc: form.bannerDesc.trim(),
+    image: form.bannerImage.trim(),
+    color: form.bannerColor.trim(),
+    bgColor: form.bannerBgColor.trim(),
+  }
+
+  if (!banner.title && !banner.subtitle && !banner.desc && !banner.image) {
+    return null
+  }
+
+  return banner
+}
+
 function createEmptyForm(): GameForm {
   return {
     name: '',
@@ -139,10 +123,18 @@ function createEmptyForm(): GameForm {
     description: '',
     version: '1.0.0',
     size: '',
+    openTime: '',
+    heat: 0,
     downloadUrl: '',
     guideUrl: '',
     dropRateUrl: '',
     imageUrl: '',
+    bannerTitle: '',
+    bannerSubtitle: '',
+    bannerDesc: '',
+    bannerImage: '',
+    bannerColor: 'from-amber-500 to-orange-600',
+    bannerBgColor: 'bg-amber-50',
     rating: 5.0,
     downloads: 100,
     status: 'active',
@@ -157,10 +149,18 @@ function gameToForm(game: Game): GameForm {
     description: game.description,
     version: game.version,
     size: game.size,
+    openTime: game.openTime || '',
+    heat: game.heat || 0,
     downloadUrl: game.downloadUrl,
     guideUrl: game.guideUrl || '',
     dropRateUrl: game.dropRateUrl || '',
     imageUrl: game.imageUrl,
+    bannerTitle: game.banner?.title || '',
+    bannerSubtitle: game.banner?.subtitle || '',
+    bannerDesc: game.banner?.desc || '',
+    bannerImage: game.banner?.image || '',
+    bannerColor: game.banner?.color || 'from-amber-500 to-orange-600',
+    bannerBgColor: game.banner?.bgColor || 'bg-amber-50',
     rating: game.rating,
     downloads: game.downloads,
     status: game.status || 'active',
@@ -175,10 +175,13 @@ function formToGame(form: GameForm): Omit<Game, 'id' | 'addedAt'> {
     description: form.description.trim(),
     version: form.version.trim(),
     size: form.size.trim(),
+    openTime: form.openTime.trim(),
+    heat: Number(form.heat) || 0,
     downloadUrl: form.downloadUrl.trim(),
     guideUrl: form.guideUrl.trim(),
     dropRateUrl: form.dropRateUrl.trim(),
     imageUrl: form.imageUrl.trim(),
+    banner: toBannerOrNull(form),
     rating: Number(form.rating) || 0,
     downloads: Number(form.downloads) || 0,
     status: form.status,
@@ -205,11 +208,12 @@ export default function Admin() {
   const [message, setMessage] = useState('')
   const [showGameForm, setShowGameForm] = useState(false)
 
-  const [banners, setBanners] = useState<BannerConfig[]>(loadBanners)
+  const [banners, setBanners] = useState<HeroBanner[]>([])
   const [bannerTab, setBannerTab] = useState(false)
-  const [editingBanner, setEditingBanner] = useState<BannerConfig | null>(null)
-  const [bannerForm, setBannerForm] = useState<BannerConfig>(defaultBanners[0])
+  const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null)
+  const [bannerForm, setBannerForm] = useState<HeroBanner>(createEmptyHeroBanner())
   const [bannerMessage, setBannerMessage] = useState('')
+  const [bannerLoading, setBannerLoading] = useState(false)
 
   // 公告管理状态
   const [announcements, setAnnouncements] = useState<AnnouncementConfig[]>(loadAnnouncements)
@@ -239,6 +243,23 @@ export default function Admin() {
     setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => {} })
   }
 
+  const fetchHeroBanners = async () => {
+    setBannerLoading(true)
+    const response = await api.getHeroBanners(true)
+    if (response.success && response.data) {
+      setBanners(response.data)
+      setBannerMessage('')
+    } else {
+      setBannerMessage(response.message || '获取 Banner 失败')
+    }
+    setBannerLoading(false)
+  }
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    void fetchHeroBanners()
+  }, [isAuthenticated])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password) {
@@ -267,6 +288,7 @@ export default function Admin() {
     clearAdminToken()
     setIsAuthenticated(false)
     setPassword('')
+    setBanners([])
   }
 
   const openEdit = (game: Game) => {
@@ -287,46 +309,91 @@ export default function Admin() {
 
   const openAddBanner = () => {
     setEditingBanner(null)
-    setBannerForm({ ...defaultBanners[0], id: Date.now(), title: '', subtitle: '', desc: '', image: '' })
+    setBannerForm(createEmptyHeroBanner(banners.length))
     setBannerMessage('')
   }
 
-  const openEditBanner = (banner: BannerConfig) => {
+  const openEditBanner = (banner: HeroBanner) => {
     setEditingBanner(banner)
     setBannerForm({ ...banner })
     setBannerMessage('')
   }
 
-  const handleSaveBanner = () => {
+  const handleSaveBanner = async () => {
     if (!bannerForm.title.trim() || !bannerForm.image.trim()) {
       setBannerMessage('请填写标题和图片地址')
       return
     }
-    const newBanners = editingBanner
-      ? banners.map(b => b.id === editingBanner.id ? bannerForm : b)
-      : [...banners, bannerForm]
-    setBanners(newBanners)
-    saveBanners(newBanners)
-    setBannerMessage('保存成功！刷新首页生效')
-    setEditingBanner(null)
+
+    setBannerLoading(true)
+    const payload = {
+      title: bannerForm.title.trim(),
+      subtitle: bannerForm.subtitle.trim(),
+      desc: bannerForm.desc.trim(),
+      image: bannerForm.image.trim(),
+      color: bannerForm.color.trim(),
+      bgColor: bannerForm.bgColor.trim(),
+      sortOrder: bannerForm.sortOrder,
+      visible: bannerForm.visible,
+    }
+
+    const response = editingBanner
+      ? await api.updateHeroBanner(editingBanner.id, payload)
+      : await api.createHeroBanner(payload)
+
+    if (response.success) {
+      await fetchHeroBanners()
+      setBannerMessage('保存成功，官网与客户端将共用这组 Banner')
+      setEditingBanner(null)
+      setBannerForm(createEmptyHeroBanner(banners.length))
+    } else {
+      setBannerMessage(response.message || '保存 Banner 失败')
+    }
+    setBannerLoading(false)
   }
 
   const handleDeleteBanner = (id: number) => {
-    showConfirm('删除 Banner', '确定删除这个 Banner 吗？此操作不可恢复。', () => {
-      const newBanners = banners.filter(b => b.id !== id)
-      setBanners(newBanners)
-      saveBanners(newBanners)
+    showConfirm('删除 Banner', '确定删除这个 Banner 吗？此操作不可恢复。', async () => {
+      const response = await api.deleteHeroBanner(id)
+      if (response.success) {
+        await fetchHeroBanners()
+        setBannerMessage('删除成功')
+      } else {
+        setBannerMessage(response.message || '删除 Banner 失败')
+      }
     })
   }
 
-  const handleMoveBanner = (index: number, direction: 'up' | 'down') => {
+  const handleMoveBanner = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return
     if (direction === 'down' && index === banners.length - 1) return
     const newBanners = [...banners]
     const targetIndex = direction === 'up' ? index - 1 : index + 1
     ;[newBanners[index], newBanners[targetIndex]] = [newBanners[targetIndex], newBanners[index]]
-    setBanners(newBanners)
-    saveBanners(newBanners)
+    const reordered = newBanners.map((banner, order) => ({ ...banner, sortOrder: order }))
+    setBanners(reordered)
+    setBannerLoading(true)
+    const responses = await Promise.all(
+      reordered.map(banner =>
+        api.updateHeroBanner(banner.id, {
+          title: banner.title,
+          subtitle: banner.subtitle,
+          desc: banner.desc,
+          image: banner.image,
+          color: banner.color,
+          bgColor: banner.bgColor,
+          sortOrder: banner.sortOrder,
+          visible: banner.visible,
+        }),
+      ),
+    )
+    if (responses.every(response => response.success)) {
+      setBannerMessage('排序已更新')
+      await fetchHeroBanners()
+    } else {
+      setBannerMessage('排序保存失败，请重试')
+    }
+    setBannerLoading(false)
   }
 
   // 公告管理函数
@@ -583,14 +650,25 @@ export default function Admin() {
             className="space-y-6"
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">首页 Banner 管理</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">首页 Banner 管理</h2>
+                <p className="text-sm text-gray-500 mt-1">这里的数据会同步供官网首页和客户端 Banner 共用</p>
+              </div>
+              <div className="flex items-center gap-3">
                 <button
-                onClick={openAddBanner}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                添加 Banner
-              </button>
+                  onClick={() => void fetchHeroBanners()}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  刷新
+                </button>
+                <button
+                  onClick={openAddBanner}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  添加 Banner
+                </button>
+              </div>
             </div>
 
             {bannerMessage && (
@@ -601,6 +679,16 @@ export default function Admin() {
 
             {/* Banner 列表 */}
             <div className="grid gap-4">
+              {bannerLoading && banners.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 text-sm text-gray-500">
+                  正在加载 Banner 数据...
+                </div>
+              )}
+              {!bannerLoading && banners.length === 0 && (
+                <div className="bg-white rounded-xl border border-dashed border-gray-200 p-6 text-sm text-gray-500">
+                  还没有 Banner，添加后官网首页和客户端会共用这里的数据。
+                </div>
+              )}
               {banners.map((banner, index) => (
                 <motion.div
                   key={banner.id}
@@ -615,15 +703,23 @@ export default function Admin() {
                     <div className="flex-1 p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <h3 className="font-bold text-gray-900">{banner.title}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-gray-900">{banner.title}</h3>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full ${banner.visible ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {banner.visible ? '显示中' : '已隐藏'}
+                            </span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                              排序 #{banner.sortOrder + 1}
+                            </span>
+                          </div>
                           <p className="text-sm text-gray-500 mt-1">{banner.subtitle}</p>
                           <p className="text-xs text-gray-400 mt-1 line-clamp-2">{banner.desc}</p>
                           <p className="text-xs text-gray-400 mt-2 break-all">{banner.image}</p>
                         </div>
                         <div className="flex flex-col gap-1 flex-shrink-0">
                           <button
-                            onClick={() => handleMoveBanner(index, 'up')}
-                            disabled={index === 0}
+                            onClick={() => void handleMoveBanner(index, 'up')}
+                            disabled={index === 0 || bannerLoading}
                             className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                           >
                             <ChevronLeft className="w-4 h-4 rotate-90" />
@@ -641,8 +737,8 @@ export default function Admin() {
                             <Trash2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleMoveBanner(index, 'down')}
-                            disabled={index === banners.length - 1}
+                            onClick={() => void handleMoveBanner(index, 'down')}
+                            disabled={index === banners.length - 1 || bannerLoading}
                             className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                           >
                             <ChevronLeft className="w-4 h-4 -rotate-90" />
@@ -737,6 +833,15 @@ export default function Admin() {
                       <option value="bg-gray-50">灰色 50</option>
                     </select>
                   </div>
+                  <label className="sm:col-span-2 flex items-center gap-3 px-3 py-2 border border-gray-200 rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bannerForm.visible}
+                      onChange={e => setBannerForm({ ...bannerForm, visible: e.target.checked })}
+                      className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-gray-700">客户端与官网首页显示此 Banner</span>
+                  </label>
                 </div>
 
                 {bannerForm.image && (
@@ -748,17 +853,18 @@ export default function Admin() {
 
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => { setEditingBanner(null); setBannerForm(defaultBanners[0]) }}
+                    onClick={() => { setEditingBanner(null); setBannerForm(createEmptyHeroBanner(banners.length)) }}
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消
                   </button>
                   <button
-                    onClick={handleSaveBanner}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                    onClick={() => void handleSaveBanner()}
+                    disabled={bannerLoading}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-60 transition-colors"
                   >
                     <Save className="w-4 h-4" />
-                    保存 Banner
+                    {bannerLoading ? '保存中...' : '保存 Banner'}
                   </button>
                 </div>
               </motion.div>
@@ -1021,6 +1127,28 @@ export default function Admin() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">开服时间</label>
+                <input
+                  type="text"
+                  value={form.openTime}
+                  onChange={e => setForm({ ...form, openTime: e.target.value })}
+                  placeholder="例如：2026-07-20 19:00"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">热度值</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.heat}
+                  onChange={e => setForm({ ...form, heat: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
+              </div>
+
               {/* Rating */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">评分 (0-10)</label>
@@ -1111,6 +1239,83 @@ export default function Admin() {
                   placeholder="热血, PK, 打金"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                 />
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
+                  <div className="mb-4">
+                    <div className="text-sm font-semibold text-gray-900">首页 Banner 数据</div>
+                    <p className="mt-1 text-xs text-gray-500">填写后会优先用于首页 Hero 轮播；留空则继续回退到站点本地 Banner 配置。</p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 标题</label>
+                      <input
+                        type="text"
+                        value={form.bannerTitle}
+                        onChange={e => setForm({ ...form, bannerTitle: e.target.value })}
+                        placeholder="例如：复古传奇"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 副标题</label>
+                      <input
+                        type="text"
+                        value={form.bannerSubtitle}
+                        onChange={e => setForm({ ...form, bannerSubtitle: e.target.value })}
+                        placeholder="例如：经典再现，热血重燃"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 描述</label>
+                      <textarea
+                        value={form.bannerDesc}
+                        onChange={e => setForm({ ...form, bannerDesc: e.target.value })}
+                        placeholder="用于首页首屏的简短文案"
+                        rows={2}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 图片</label>
+                      <input
+                        type="url"
+                        value={form.bannerImage}
+                        onChange={e => setForm({ ...form, bannerImage: e.target.value })}
+                        placeholder="例如：https://.../banner.jpg"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">前景渐变</label>
+                      <input
+                        type="text"
+                        value={form.bannerColor}
+                        onChange={e => setForm({ ...form, bannerColor: e.target.value })}
+                        placeholder="from-amber-500 to-orange-600"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">背景色标记</label>
+                      <input
+                        type="text"
+                        value={form.bannerBgColor}
+                        onChange={e => setForm({ ...form, bannerBgColor: e.target.value })}
+                        placeholder="bg-amber-50"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Description */}
