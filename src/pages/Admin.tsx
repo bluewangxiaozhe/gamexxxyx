@@ -21,6 +21,43 @@ function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
   }
 }
 
+function normalizeLegacyHeroBanner(raw: any, fallbackSortOrder = 0): HeroBanner | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  const title = String(raw.title || '').trim()
+  const image = String(raw.image || '').trim()
+  if (!title && !image) return null
+
+  return {
+    id: Number(raw.id) || Date.now() + fallbackSortOrder,
+    title,
+    subtitle: String(raw.subtitle || '').trim(),
+    desc: String(raw.desc || '').trim(),
+    image,
+    color: String(raw.color || '').trim() || 'from-amber-500 to-orange-600',
+    bgColor: String(raw.bgColor || '').trim() || 'bg-amber-50',
+    sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : fallbackSortOrder,
+    visible: raw.visible !== false,
+  }
+}
+
+function loadLegacyHeroBanners(): HeroBanner[] {
+  try {
+    const saved = localStorage.getItem('hero_banners')
+    if (!saved) return []
+
+    const parsed = JSON.parse(saved)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item, index) => normalizeLegacyHeroBanner(item, index))
+      .filter((item): item is HeroBanner => item !== null)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+  } catch {
+    return []
+  }
+}
+
 // 公告管理
 interface AnnouncementConfig {
   id: number
@@ -214,6 +251,7 @@ export default function Admin() {
   const [bannerForm, setBannerForm] = useState<HeroBanner>(createEmptyHeroBanner())
   const [bannerMessage, setBannerMessage] = useState('')
   const [bannerLoading, setBannerLoading] = useState(false)
+  const [showBannerForm, setShowBannerForm] = useState(false)
 
   // 公告管理状态
   const [announcements, setAnnouncements] = useState<AnnouncementConfig[]>(loadAnnouncements)
@@ -247,8 +285,17 @@ export default function Admin() {
     setBannerLoading(true)
     const response = await api.getHeroBanners(true)
     if (response.success && response.data) {
-      setBanners(response.data)
-      setBannerMessage('')
+      const legacyBanners = loadLegacyHeroBanners()
+      if (response.data.length > 0) {
+        setBanners(response.data)
+        setBannerMessage('')
+      } else if (legacyBanners.length > 0) {
+        setBanners(legacyBanners)
+        setBannerMessage('检测到旧版本地 Banner 数据。当前先恢复显示，保存后会迁移到服务端。')
+      } else {
+        setBanners([])
+        setBannerMessage('')
+      }
     } else {
       setBannerMessage(response.message || '获取 Banner 失败')
     }
@@ -311,12 +358,14 @@ export default function Admin() {
     setEditingBanner(null)
     setBannerForm(createEmptyHeroBanner(banners.length))
     setBannerMessage('')
+    setShowBannerForm(true)
   }
 
   const openEditBanner = (banner: HeroBanner) => {
     setEditingBanner(banner)
     setBannerForm({ ...banner })
     setBannerMessage('')
+    setShowBannerForm(true)
   }
 
   const handleSaveBanner = async () => {
@@ -346,6 +395,7 @@ export default function Admin() {
       setBannerMessage('保存成功，官网与客户端将共用这组 Banner')
       setEditingBanner(null)
       setBannerForm(createEmptyHeroBanner(banners.length))
+      setShowBannerForm(false)
     } else {
       setBannerMessage(response.message || '保存 Banner 失败')
     }
@@ -677,6 +727,12 @@ export default function Admin() {
               </div>
             )}
 
+            {!showBannerForm && (
+              <div className="text-sm text-gray-500">
+                点击右上角“添加 Banner”或列表里的编辑按钮后，会在这里展开编辑表单。
+              </div>
+            )}
+
             {/* Banner 列表 */}
             <div className="grid gap-4">
               {bannerLoading && banners.length === 0 && (
@@ -752,7 +808,7 @@ export default function Admin() {
             </div>
 
             {/* Banner 编辑表单 */}
-            {(editingBanner !== null || bannerForm.title === '') && (
+            {showBannerForm && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -853,7 +909,11 @@ export default function Admin() {
 
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => { setEditingBanner(null); setBannerForm(createEmptyHeroBanner(banners.length)) }}
+                    onClick={() => {
+                      setEditingBanner(null)
+                      setBannerForm(createEmptyHeroBanner(banners.length))
+                      setShowBannerForm(false)
+                    }}
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消

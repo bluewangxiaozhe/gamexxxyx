@@ -71,6 +71,43 @@ const defaultBanners: HeroBanner[] = [
   },
 ]
 
+function normalizeLegacyHeroBanner(raw: any, fallbackSortOrder = 0): HeroBanner | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  const title = String(raw.title || '').trim()
+  const image = String(raw.image || '').trim()
+  if (!title && !image) return null
+
+  return {
+    id: Number(raw.id) || fallbackSortOrder + 1,
+    title,
+    subtitle: String(raw.subtitle || '').trim(),
+    desc: String(raw.desc || '').trim(),
+    image,
+    color: String(raw.color || '').trim() || 'from-amber-500 to-orange-600',
+    bgColor: String(raw.bgColor || '').trim() || 'bg-amber-50',
+    sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : fallbackSortOrder,
+    visible: raw.visible !== false,
+  }
+}
+
+function loadLegacyHeroBanners(): HeroBanner[] {
+  try {
+    const saved = localStorage.getItem('hero_banners')
+    if (!saved) return []
+
+    const parsed = JSON.parse(saved)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item, index) => normalizeLegacyHeroBanner(item, index))
+      .filter((item): item is HeroBanner => item !== null && item.visible)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+  } catch {
+    return []
+  }
+}
+
 function deriveGameBanners(games: Game[]): HeroBanner[] {
   return games
     .filter(game => game.status === 'active' && game.banner)
@@ -99,11 +136,14 @@ export default function Hero({ games }: HeroProps) {
   const [announcements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
+  const [legacyBanners] = useState<HeroBanner[]>(loadLegacyHeroBanners)
   const { heroBanners } = useHeroBanners()
   const navigate = useNavigate()
 
   const gameBanners = deriveGameBanners(games)
-  const banners = heroBanners.length > 0 ? heroBanners : (gameBanners.length > 0 ? gameBanners : defaultBanners)
+  const banners = heroBanners.length > 0
+    ? heroBanners
+    : (legacyBanners.length > 0 ? legacyBanners : (gameBanners.length > 0 ? gameBanners : defaultBanners))
 
   const nextBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev + 1) % banners.length)
