@@ -69,6 +69,18 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS announcements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT DEFAULT '',
+    link TEXT DEFAULT '',
+    visible INTEGER DEFAULT 1,
+    createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 const gameColumns = db.prepare('PRAGMA table_info(games)').all().map(column => column.name);
 if (!gameColumns.includes('dropRateUrl')) {
   db.prepare("ALTER TABLE games ADD COLUMN dropRateUrl TEXT DEFAULT ''").run();
@@ -186,6 +198,15 @@ function serializeHeroBanner(row) {
   };
 }
 
+function serializeAnnouncement(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    link: String(row.link || '').trim(),
+    visible: Number(row.visible || 0) !== 0,
+  };
+}
+
 function getNextHeroBannerSortOrder() {
   const row = db.prepare('SELECT COALESCE(MAX(sortOrder), -1) AS maxSortOrder FROM hero_banners').get();
   return Number(row?.maxSortOrder ?? -1) + 1;
@@ -204,6 +225,16 @@ function normalizeHeroBannerInput(input, fallback = {}) {
     bgColor: String(banner.bgColor || '').trim() || 'bg-amber-50',
     sortOrder: Number.isFinite(parsedSortOrder) ? parsedSortOrder : null,
     visible: normalizeBoolean(banner.visible, true) ? 1 : 0,
+  };
+}
+
+function normalizeAnnouncementInput(input, fallback = {}) {
+  const announcement = { ...fallback, ...(input || {}) };
+  return {
+    title: String(announcement.title || '').trim(),
+    content: String(announcement.content || '').trim(),
+    link: String(announcement.link || '').trim(),
+    visible: normalizeBoolean(announcement.visible, true) ? 1 : 0,
   };
 }
 
@@ -323,6 +354,17 @@ app.get('/api/hero-banners', (req, res) => {
   `).all();
 
   res.json(rows.map(serializeHeroBanner));
+});
+
+app.get('/api/announcements', (req, res) => {
+  const includeHidden = req.query.includeHidden === 'true';
+  const rows = db.prepare(`
+    SELECT * FROM announcements
+    ${includeHidden ? '' : 'WHERE visible = 1'}
+    ORDER BY datetime(updatedAt) DESC, id DESC
+  `).all();
+
+  res.json(rows.map(serializeAnnouncement));
 });
 
 app.get('/api/games/search', (req, res) => {
@@ -470,6 +512,57 @@ app.put('/api/hero-banners/:id', requireAuth, (req, res) => {
 
 app.delete('/api/hero-banners/:id', requireAuth, (req, res) => {
   const result = db.prepare('DELETE FROM hero_banners WHERE id = ?').run(req.params.id);
+  res.json({ success: result.changes > 0 });
+});
+
+app.post('/api/announcements', requireAuth, (req, res) => {
+  const announcement = normalizeAnnouncementInput(req.body);
+  if (!announcement.title || !announcement.content) {
+    res.status(400).json({ success: false, message: 'title and content are required' });
+    return;
+  }
+
+  const result = db.prepare(`
+    INSERT INTO announcements (
+      title, content, link, visible
+    ) VALUES (
+      @title, @content, @link, @visible
+    )
+  `).run(announcement);
+
+  const created = db.prepare('SELECT * FROM announcements WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(serializeAnnouncement(created));
+});
+
+app.put('/api/announcements/:id', requireAuth, (req, res) => {
+  const existing = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Announcement not found' });
+    return;
+  }
+
+  const announcement = normalizeAnnouncementInput(req.body, serializeAnnouncement(existing));
+  if (!announcement.title || !announcement.content) {
+    res.status(400).json({ success: false, message: 'title and content are required' });
+    return;
+  }
+
+  db.prepare(`
+    UPDATE announcements SET
+      title = @title,
+      content = @content,
+      link = @link,
+      visible = @visible,
+      updatedAt = CURRENT_TIMESTAMP
+    WHERE id = @id
+  `).run({ id: req.params.id, ...announcement });
+
+  const updated = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
+  res.json(serializeAnnouncement(updated));
+});
+
+app.delete('/api/announcements/:id', requireAuth, (req, res) => {
+  const result = db.prepare('DELETE FROM announcements WHERE id = ?').run(req.params.id);
   res.json({ success: result.changes > 0 });
 });
 

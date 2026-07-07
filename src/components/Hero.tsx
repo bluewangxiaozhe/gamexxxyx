@@ -2,16 +2,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
-import type { Game, HeroBanner } from '@/types'
-import { useHeroBanners } from '@/hooks/useGames'
-
-interface Announcement {
-  id: number
-  title: string
-  content: string
-  link?: string
-  visible: boolean
-}
+import type { Game, HeroBanner, Announcement } from '@/types'
+import { useHeroBanners, useAnnouncements } from '@/hooks/useGames'
 
 const defaultAnnouncements: Announcement[] = [
   {
@@ -138,17 +130,21 @@ interface HeroProps {
 export default function Hero({ games }: HeroProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
-  const [announcements] = useState<Announcement[]>(loadAnnouncements)
+  const [legacyAnnouncements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
   const [legacyBanners] = useState<HeroBanner[]>(loadLegacyHeroBanners)
   const { heroBanners } = useHeroBanners()
+  const { announcements: remoteAnnouncements } = useAnnouncements()
   const navigate = useNavigate()
 
   const gameBanners = deriveGameBanners(games)
   const banners = heroBanners.length > 0
     ? heroBanners
     : (legacyBanners.length > 0 ? legacyBanners : (gameBanners.length > 0 ? gameBanners : defaultBanners))
+  const announcements = remoteAnnouncements.length > 0
+    ? remoteAnnouncements
+    : (legacyAnnouncements.length > 0 ? legacyAnnouncements : defaultAnnouncements)
 
   const nextBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev + 1) % banners.length)
@@ -186,6 +182,12 @@ export default function Hero({ games }: HeroProps) {
       setCurrentBanner(0)
     }
   }, [banners.length, currentBanner])
+
+  useEffect(() => {
+    if (currentAnnouncement >= announcements.length) {
+      setCurrentAnnouncement(0)
+    }
+  }, [announcements.length, currentAnnouncement])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -262,7 +264,7 @@ export default function Hero({ games }: HeroProps) {
       {/* 固定背景色 */}
       <div className="absolute inset-0 bg-slate-950" />
 
-      <div className="relative z-10">
+      <div className="relative z-10 w-full">
         <AnimatePresence mode="wait">
           <motion.div
             key={banner.id}
@@ -270,7 +272,7 @@ export default function Hero({ games }: HeroProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.98 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="relative min-h-[72vh] overflow-hidden"
+            className="relative min-h-[72vh] w-full overflow-hidden"
           >
             <div className="absolute inset-0 bg-slate-900" />
             <img

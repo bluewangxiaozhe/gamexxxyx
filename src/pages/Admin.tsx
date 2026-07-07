@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api, setAdminToken, clearAdminToken, getAdminToken } from '@/utils/api'
-import type { Game, GameBanner, HeroBanner } from '@/types'
+import type { Game, GameBanner, HeroBanner, Announcement } from '@/types'
 import UppyUploader from '@/components/UppyUploader'
 
 function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
@@ -60,16 +60,7 @@ function loadLegacyHeroBanners(): HeroBanner[] {
   }
 }
 
-// 公告管理
-interface AnnouncementConfig {
-  id: number
-  title: string
-  content: string
-  link?: string
-  visible: boolean
-}
-
-const defaultAnnouncements: AnnouncementConfig[] = [
+const defaultAnnouncements: Announcement[] = [
   {
     id: 1,
     title: '欢迎来到小小小游戏',
@@ -78,7 +69,7 @@ const defaultAnnouncements: AnnouncementConfig[] = [
   },
 ]
 
-function loadAnnouncements(): AnnouncementConfig[] {
+function loadAnnouncements(): Announcement[] {
   try {
     const saved = localStorage.getItem('announcements')
     if (saved) {
@@ -87,10 +78,6 @@ function loadAnnouncements(): AnnouncementConfig[] {
     }
   } catch { /* ignore */ }
   return defaultAnnouncements
-}
-
-function saveAnnouncements(announcements: AnnouncementConfig[]) {
-  localStorage.setItem('announcements', JSON.stringify(announcements))
 }
 
 const CATEGORY_OPTIONS = ['单职业', '复古', '微变', '超变', '合击', '沉默', '专属']
@@ -257,11 +244,12 @@ export default function Admin() {
   const [showBannerForm, setShowBannerForm] = useState(false)
 
   // 公告管理状态
-  const [announcements, setAnnouncements] = useState<AnnouncementConfig[]>(loadAnnouncements)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [announcementTab, setAnnouncementTab] = useState(false)
-  const [editingAnnouncement, setEditingAnnouncement] = useState<AnnouncementConfig | null>(null)
-  const [announcementForm, setAnnouncementForm] = useState<AnnouncementConfig>({ id: 0, title: '', content: '', link: '', visible: true })
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
+  const [announcementForm, setAnnouncementForm] = useState<Announcement>({ id: 0, title: '', content: '', link: '', visible: true })
   const [announcementMessage, setAnnouncementMessage] = useState('')
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false)
 
   // 自定义确认对话框状态
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -310,6 +298,35 @@ export default function Admin() {
     void fetchHeroBanners()
   }, [isAuthenticated])
 
+  const fetchAnnouncements = async () => {
+    const response = await api.getAnnouncements(true)
+    const legacyAnnouncements = loadAnnouncements()
+    if (response.success && response.data) {
+      if (response.data.length > 0) {
+        setAnnouncements(response.data)
+        setAnnouncementMessage('')
+      } else if (legacyAnnouncements.length > 0) {
+        setAnnouncements(legacyAnnouncements)
+        setAnnouncementMessage('检测到旧版本地公告数据。当前先恢复显示，保存后会迁移到服务端。')
+      } else {
+        setAnnouncements([])
+        setAnnouncementMessage('')
+      }
+    } else {
+      if (legacyAnnouncements.length > 0) {
+        setAnnouncements(legacyAnnouncements)
+        setAnnouncementMessage('公告接口暂不可用，已回退到本地旧公告数据。')
+      } else {
+        setAnnouncementMessage(response.message || '获取公告失败')
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    void fetchAnnouncements()
+  }, [isAuthenticated])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password) {
@@ -339,6 +356,7 @@ export default function Admin() {
     setIsAuthenticated(false)
     setPassword('')
     setBanners([])
+    setAnnouncements([])
   }
 
   const openEdit = (game: Game) => {
@@ -456,41 +474,70 @@ export default function Admin() {
     setEditingAnnouncement(null)
     setAnnouncementForm({ id: Date.now(), title: '', content: '', link: '', visible: true })
     setAnnouncementMessage('')
+    setShowAnnouncementForm(true)
   }
 
-  const openEditAnnouncement = (announcement: AnnouncementConfig) => {
+  const openEditAnnouncement = (announcement: Announcement) => {
     setEditingAnnouncement(announcement)
     setAnnouncementForm({ ...announcement })
     setAnnouncementMessage('')
+    setShowAnnouncementForm(true)
   }
 
-  const handleSaveAnnouncement = () => {
+  const handleSaveAnnouncement = async () => {
     if (!announcementForm.title.trim() || !announcementForm.content.trim()) {
       setAnnouncementMessage('请填写标题和内容')
       return
     }
-    const newAnnouncements = editingAnnouncement
-      ? announcements.map(a => a.id === editingAnnouncement.id ? { ...announcementForm } : a)
-      : [...announcements, { ...announcementForm, id: Date.now() }]
-    setAnnouncements(newAnnouncements)
-    saveAnnouncements(newAnnouncements)
-    setAnnouncementMessage('保存成功！刷新首页生效')
-    setEditingAnnouncement(null)
+
+    const payload = {
+      title: announcementForm.title.trim(),
+      content: announcementForm.content.trim(),
+      link: (announcementForm.link || '').trim(),
+      visible: announcementForm.visible,
+    }
+
+    const response = editingAnnouncement
+      ? await api.updateAnnouncement(editingAnnouncement.id, payload)
+      : await api.createAnnouncement(payload)
+
+    if (response.success) {
+      await fetchAnnouncements()
+      setAnnouncementMessage('保存成功，官网与客户端将共用这组公告')
+      setEditingAnnouncement(null)
+      setAnnouncementForm({ id: 0, title: '', content: '', link: '', visible: true })
+      setShowAnnouncementForm(false)
+    } else {
+      setAnnouncementMessage(response.message || '保存公告失败')
+    }
   }
 
   const handleDeleteAnnouncement = (id: number) => {
-    showConfirm('删除公告', '确定删除这条公告吗？此操作不可恢复。', () => {
-      const newAnnouncements = announcements.filter(a => a.id !== id)
-      setAnnouncements(newAnnouncements)
-      saveAnnouncements(newAnnouncements)
+    showConfirm('删除公告', '确定删除这条公告吗？此操作不可恢复。', async () => {
+      const response = await api.deleteAnnouncement(id)
+      if (response.success) {
+        await fetchAnnouncements()
+        setAnnouncementMessage('删除成功')
+      } else {
+        setAnnouncementMessage(response.message || '删除公告失败')
+      }
     })
   }
 
-  const handleToggleAnnouncement = (announcement: AnnouncementConfig) => {
+  const handleToggleAnnouncement = async (announcement: Announcement) => {
     const updated = { ...announcement, visible: !announcement.visible }
-    const newAnnouncements = announcements.map(a => a.id === announcement.id ? updated : a)
-    setAnnouncements(newAnnouncements)
-    saveAnnouncements(newAnnouncements)
+    const response = await api.updateAnnouncement(announcement.id, {
+      title: updated.title,
+      content: updated.content,
+      link: updated.link || '',
+      visible: updated.visible,
+    })
+    if (response.success) {
+      await fetchAnnouncements()
+      setAnnouncementMessage(updated.visible ? '公告已显示' : '公告已隐藏')
+    } else {
+      setAnnouncementMessage(response.message || '更新公告状态失败')
+    }
   }
 
   const handleGameFileUpload = (data: FileData) => {
@@ -1037,7 +1084,7 @@ export default function Admin() {
             </div>
 
             {/* 公告编辑表单 */}
-            {editingAnnouncement !== null && (
+            {showAnnouncementForm && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1092,7 +1139,11 @@ export default function Admin() {
 
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => { setEditingAnnouncement(null); setAnnouncementForm({ id: 0, title: '', content: '', link: '', visible: true }); }}
+                    onClick={() => {
+                      setEditingAnnouncement(null)
+                      setAnnouncementForm({ id: 0, title: '', content: '', link: '', visible: true })
+                      setShowAnnouncementForm(false)
+                    }}
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消

@@ -1,4 +1,4 @@
-import type { Game, HeroBanner, ApiResponse } from '@/types'
+import type { Game, HeroBanner, Announcement, ApiResponse } from '@/types'
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'https://api.567zm.com/api'
 
@@ -88,9 +88,13 @@ export const api = {
   getGamesByCategory: (category: string) => request<Game[]>(`/games?category=${encodeURIComponent(category)}`),
   searchGames: (query: string) => request<Game[]>(`/games/search?q=${encodeURIComponent(query)}`),
   getHeroBanners: (includeHidden = false) => request<HeroBanner[]>(`/hero-banners${includeHidden ? '?includeHidden=true' : ''}`),
+  getAnnouncements: (includeHidden = false) => request<Announcement[]>(`/announcements${includeHidden ? '?includeHidden=true' : ''}`),
   createHeroBanner: (banner: Omit<HeroBanner, 'id'>) => request<HeroBanner>('/hero-banners', { method: 'POST', body: JSON.stringify(banner) }),
   updateHeroBanner: (id: number, banner: Partial<HeroBanner>) => request<HeroBanner>(`/hero-banners/${id}`, { method: 'PUT', body: JSON.stringify(banner) }),
   deleteHeroBanner: (id: number) => request<null>(`/hero-banners/${id}`, { method: 'DELETE' }),
+  createAnnouncement: (announcement: Omit<Announcement, 'id'>) => request<Announcement>('/announcements', { method: 'POST', body: JSON.stringify(announcement) }),
+  updateAnnouncement: (id: number, announcement: Partial<Announcement>) => request<Announcement>(`/announcements/${id}`, { method: 'PUT', body: JSON.stringify(announcement) }),
+  deleteAnnouncement: (id: number) => request<null>(`/announcements/${id}`, { method: 'DELETE' }),
   createGame: (game: Omit<Game, 'id'>) => request<Game>('/games', { method: 'POST', body: JSON.stringify(game) }),
   updateGame: (id: number, game: Partial<Game>) => request<Game>(`/games/${id}`, { method: 'PUT', body: JSON.stringify(game) }),
   deleteGame: (id: number) => request<null>(`/games/${id}`, { method: 'DELETE' }),

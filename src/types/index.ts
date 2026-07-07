@@ -58,5 +58,6 @@ export interface Announcement {
   content: string
   link?: string
   visible: boolean
-  createdAt: string
+  createdAt?: string
+  updatedAt?: string
 }
