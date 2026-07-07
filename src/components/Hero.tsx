@@ -42,7 +42,7 @@ const defaultBanners: HeroBanner[] = [
     title: '复古传奇',
     subtitle: '经典再现，热血重燃',
     desc: '原汁原味的传奇体验，战法道三职业，沙巴克攻城等你来战',
-    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1600&h=900&fit=crop',
+    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1920&h=480&fit=crop',
     color: 'from-amber-500 to-orange-600',
     bgColor: 'bg-amber-50',
     sortOrder: 0,
@@ -54,7 +54,7 @@ const defaultBanners: HeroBanner[] = [
     title: '沉默专属',
     subtitle: '独家版本，专属神器',
     desc: '全新沉默版本，专属装备系统，打造属于你的传奇之路',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1600&h=900&fit=crop',
+    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1920&h=480&fit=crop',
     color: 'from-purple-500 to-indigo-600',
     bgColor: 'bg-purple-50',
     sortOrder: 1,
@@ -66,7 +66,7 @@ const defaultBanners: HeroBanner[] = [
     title: '单职业超变',
     subtitle: '一刀999，爽到飞起',
     desc: '单职业超变版本，超高爆率，装备全靠打，散人也能当大佬',
-    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1600&h=900&fit=crop',
+    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1920&h=480&fit=crop',
     color: 'from-red-500 to-pink-600',
     bgColor: 'bg-red-50',
     sortOrder: 2,
@@ -414,7 +414,7 @@ export default function Hero({ games }: HeroProps) {
                 transition={{ duration: 0.6 }}
                 className="relative"
               >
-                <div className="aspect-video rounded-3xl overflow-hidden shadow-2xl relative">
+                <div className="aspect-[4/1] rounded-3xl overflow-hidden shadow-2xl relative">
                   <img
                     src={banner.image}
                     alt={banner.title}
