@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Download, Sparkles, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, Download, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import type { Game, HeroBanner, Announcement } from '@/types'
@@ -129,10 +129,21 @@ interface HeroProps {
   games: Game[]
 }
 
+function getAlternateImageUrl(url: string): string {
+  if (url.includes('oss.wangzhe.me')) {
+    return url.replace('oss.wangzhe.me', 'down.567zm.com')
+  }
+  if (url.includes('down.567zm.com')) {
+    return url.replace('down.567zm.com', 'oss.wangzhe.me')
+  }
+  return ''
+}
+
 export default function Hero({ games }: HeroProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
   const [imageFailed, setImageFailed] = useState(false)
+  const [imageAttempt, setImageAttempt] = useState(0)
   const [legacyAnnouncements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
@@ -201,78 +212,24 @@ export default function Hero({ games }: HeroProps) {
   }
 
   const banner = banners[currentBanner]
-  const heroImage = banner.image ? toRegionUrl(banner.image, region) : ''
+  const heroImageCandidates = banner.image
+    ? Array.from(new Set([
+        toRegionUrl(banner.image, region),
+        banner.image,
+        getAlternateImageUrl(banner.image),
+      ].filter(Boolean)))
+    : []
+  const heroImage = heroImageCandidates[imageAttempt] || ''
+  const currentNotice = announcements[currentAnnouncement]
+  const supportText = banner.subtitle || banner.desc
 
   useEffect(() => {
     setImageFailed(false)
-  }, [heroImage, banner.id])
+    setImageAttempt(0)
+  }, [banner.image, banner.id, region])
 
   return (
-    <section className="relative overflow-hidden min-h-[85vh] flex items-center pt-8">
-      {/* 滚动公告栏 - 弱化背景 + 自动隐藏 */}
-      <AnimatePresence>
-        {announcements.length > 0 && (
-          <motion.div
-            initial={{ opacity: 1, height: 'auto' }}
-            animate={{ opacity: announcementVisible ? 1 : 0, height: announcementVisible ? 'auto' : 0 }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.8, ease: 'easeInOut' }}
-            className="absolute top-0 left-0 right-0 z-50 overflow-hidden"
-          >
-            <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50">
-              <div className="max-w-7xl mx-auto px-4">
-                <div className="flex items-center justify-center gap-2 py-2 text-sm">
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="w-2 h-2 bg-amber-500 rounded-full"
-                  />
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={`${announcements[currentAnnouncement].id}-${currentAnnouncement}`}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ duration: 0.5 }}
-                      className="flex items-center gap-2 text-gray-700"
-                    >
-                      <span className="font-medium text-amber-700">{announcements[currentAnnouncement].title}:</span>
-                      <span className="text-gray-600">{announcements[currentAnnouncement].content}</span>
-                      {announcements[currentAnnouncement].link && (
-                        <a
-                          href={announcements[currentAnnouncement].link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 hover:underline"
-                        >
-                          查看详情
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
-                  {announcements.length > 1 && (
-                    <div className="flex gap-1 ml-2">
-                      {announcements.map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                            i === currentAnnouncement ? 'bg-amber-500' : 'bg-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 固定背景色 */}
-      <div className="absolute inset-0 bg-slate-950" />
-
+    <section className="relative overflow-hidden bg-slate-950">
       <div className="relative z-10 w-full">
         <AnimatePresence mode="wait">
           <motion.div
@@ -281,7 +238,7 @@ export default function Hero({ games }: HeroProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.98 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="relative min-h-[62vh] w-full overflow-hidden lg:min-h-[66vh]"
+            className="relative min-h-[640px] w-full overflow-hidden lg:min-h-[700px]"
           >
             <div className="absolute inset-0 bg-slate-900" />
             {heroImage && !imageFailed && (
@@ -289,33 +246,57 @@ export default function Hero({ games }: HeroProps) {
                 src={heroImage}
                 alt={banner.title}
                 className="absolute inset-0 h-full w-full object-cover object-center"
-                onError={() => setImageFailed(true)}
+                onError={() => {
+                  if (imageAttempt + 1 < heroImageCandidates.length) {
+                    setImageAttempt(imageAttempt + 1)
+                  } else {
+                    setImageFailed(true)
+                  }
+                }}
               />
             )}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12),transparent_42%)]" />
-            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} ${imageFailed ? 'opacity-30' : 'opacity-12'}`} />
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/58 via-slate-950/28 to-slate-950/18" />
-            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-slate-950/48 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/36 to-transparent" />
+            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} ${imageFailed ? 'opacity-30' : 'opacity-[0.08]'}`} />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-slate-950/30 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-slate-950/40 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-950/30 to-transparent" />
 
-            <div className="relative z-10 flex min-h-[62vh] items-center lg:min-h-[66vh]">
-              <div className="container-custom w-full px-6 py-12 sm:py-14 lg:py-16">
+            <div className="relative z-10 flex min-h-[640px] items-center lg:min-h-[700px]">
+              <div className="container-custom w-full px-6 py-10 sm:py-12 lg:py-14">
                 <div className="flex w-full max-w-2xl flex-col items-start text-left">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45 }}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-white/10 px-4 py-2 text-sm font-medium text-white/90 shadow-lg shadow-slate-950/30 backdrop-blur-sm"
-                  >
-                    <Sparkles className="h-4 w-4 text-amber-300" />
-                    已收录 100+ 精品游戏
-                  </motion.div>
+                  <AnimatePresence mode="wait">
+                    {currentNotice && announcementVisible && (
+                      <motion.div
+                        key={`${currentNotice.id}-${currentAnnouncement}`}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.35 }}
+                        className="mb-6 inline-flex max-w-xl items-center gap-2 rounded-full border border-white/20 bg-slate-950/40 px-4 py-2 text-sm text-white/80 backdrop-blur-sm"
+                      >
+                        <span className="h-2 w-2 rounded-full bg-amber-400" />
+                        <span className="font-semibold text-amber-200">{currentNotice.title}</span>
+                        <span className="hidden max-w-sm truncate text-white/70 sm:inline">{currentNotice.content}</span>
+                        {currentNotice.link && (
+                          <a
+                            href={currentNotice.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-amber-100 hover:text-white"
+                          >
+                            查看
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <motion.div
                     initial={{ opacity: 0, x: -30 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.5, delay: 0.05 }}
-                    className="mt-6 flex flex-col items-start"
+                    className="flex flex-col items-start"
                   >
                     <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-sm font-bold text-white shadow-lg shadow-slate-950/20 ${banner.color}`}>
                       {banner.category || '推荐'}
@@ -323,14 +304,11 @@ export default function Hero({ games }: HeroProps) {
                     <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-6xl">
                       {banner.title}
                     </h1>
-                    {banner.subtitle && (
-                      <p className="mt-3 text-lg font-semibold text-white/92 sm:text-xl">
-                        {banner.subtitle}
+                    {supportText && (
+                      <p className="mt-3 max-w-xl text-base font-semibold leading-7 text-white/80 sm:text-lg">
+                        {supportText}
                       </p>
                     )}
-                    <p className="mt-4 max-w-xl text-sm leading-7 text-white/78 sm:text-base">
-                      {banner.desc}
-                    </p>
                   </motion.div>
 
                   <motion.form
@@ -340,7 +318,7 @@ export default function Hero({ games }: HeroProps) {
                     onSubmit={handleSearch}
                     className="mt-7 w-full max-w-xl"
                   >
-                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/92 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
+                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/90 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
                       <Search className="absolute left-5 h-5 w-5 text-slate-400" />
                       <input
                         type="text"
@@ -377,7 +355,7 @@ export default function Hero({ games }: HeroProps) {
                       href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/18"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20"
                     >
                       <Download className="h-5 w-5" />
                       下载客户端
@@ -388,7 +366,7 @@ export default function Hero({ games }: HeroProps) {
                     <div className="flex items-center gap-4">
                       <button
                         onClick={prevBanner}
-                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20"
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
@@ -397,13 +375,13 @@ export default function Hero({ games }: HeroProps) {
                           key={index}
                           onClick={() => setCurrentBanner(index)}
                           className={`h-2 rounded-full transition-all duration-300 ${
-                            index === currentBanner ? 'w-10 bg-white' : 'w-2 bg-white/35 hover:bg-white/55'
+                            index === currentBanner ? 'w-10 bg-white' : 'w-2 bg-white/30 hover:bg-white/50'
                           }`}
                         />
                       ))}
                       <button
                         onClick={nextBanner}
-                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>
