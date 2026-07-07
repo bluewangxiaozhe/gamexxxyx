@@ -260,23 +260,9 @@ export default function Hero({ games }: HeroProps) {
       </AnimatePresence>
 
       {/* 固定背景色 */}
-      <div className="absolute inset-0 bg-gray-50" />
+      <div className="absolute inset-0 bg-slate-950" />
 
-      {/* 静态装饰点 - 减少动画开销 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[20, 45, 70, 35, 60, 85].map((left, i) => (
-          <div
-            key={i}
-            className="absolute w-2 h-2 bg-primary-200/40 rounded-full"
-            style={{
-              left: `${left}%`,
-              top: `${15 + (i % 3) * 25}%`,
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="container-custom relative z-10">
+      <div className="relative z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={banner.id}
@@ -284,7 +270,7 @@ export default function Hero({ games }: HeroProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.98 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="relative overflow-hidden rounded-[32px] border border-white/50 bg-slate-950 shadow-[0_30px_90px_rgba(15,23,42,0.22)]"
+            className="relative min-h-[72vh] overflow-hidden"
           >
             <div className="absolute inset-0 bg-slate-900" />
             <img
@@ -296,19 +282,20 @@ export default function Hero({ games }: HeroProps) {
                 target.style.display = 'none'
               }}
             />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_32%)]" />
-            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} opacity-20`} />
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/68 via-45% to-slate-950/28" />
-            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950/60 to-transparent" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18),transparent_45%)]" />
+            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} opacity-16`} />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/12 to-slate-950/72" />
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/70 via-slate-950/36 to-transparent" />
 
-            <div className="relative z-10 flex min-h-[560px] items-end lg:min-h-[620px]">
-              <div className="w-full px-6 py-8 sm:px-10 sm:py-10 lg:px-14 lg:py-14">
-                <div className="max-w-2xl rounded-[28px] border border-white/15 bg-white/10 p-6 backdrop-blur-md sm:p-8 lg:p-10">
+            <div className="relative z-10 flex min-h-[72vh] items-end">
+              <div className="container-custom w-full px-6 pb-12 sm:pb-14 lg:pb-16">
+                <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.45 }}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/12 px-4 py-2 text-sm font-medium text-white/88 shadow-lg shadow-slate-950/15"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-white/10 px-4 py-2 text-sm font-medium text-white/90 shadow-lg shadow-slate-950/30 backdrop-blur-sm"
                   >
                     <Sparkles className="h-4 w-4 text-amber-300" />
                     已收录 100+ 精品游戏
@@ -318,12 +305,12 @@ export default function Hero({ games }: HeroProps) {
                     initial={{ opacity: 0, x: -30 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.5, delay: 0.05 }}
-                    className="mt-6"
+                    className="mt-6 flex flex-col items-center"
                   >
                     <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-sm font-bold text-white shadow-lg shadow-slate-950/20 ${banner.color}`}>
                       {banner.category || '推荐'}
                     </div>
-                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
+                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-7xl">
                       {banner.title}
                     </h1>
                     {banner.subtitle && (
@@ -331,7 +318,7 @@ export default function Hero({ games }: HeroProps) {
                         {banner.subtitle}
                       </p>
                     )}
-                    <p className="mt-5 max-w-xl text-base leading-8 text-white/78 sm:text-lg">
+                    <p className="mt-5 max-w-2xl text-base leading-8 text-white/82 sm:text-lg">
                       {banner.desc}
                     </p>
                   </motion.div>
@@ -341,9 +328,9 @@ export default function Hero({ games }: HeroProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.12 }}
                     onSubmit={handleSearch}
-                    className="mt-8 max-w-lg"
+                    className="mt-8 w-full max-w-xl"
                   >
-                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/92 p-2 shadow-xl shadow-slate-950/15">
+                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/92 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
                       <Search className="absolute left-5 h-5 w-5 text-slate-400" />
                       <input
                         type="text"
@@ -365,7 +352,7 @@ export default function Hero({ games }: HeroProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="mt-8 flex flex-wrap gap-4"
+                    className="mt-8 flex flex-wrap justify-center gap-4"
                   >
                     <Link to="/games" className="btn-primary gap-2 px-6 py-3">
                       浏览游戏
@@ -387,7 +374,7 @@ export default function Hero({ games }: HeroProps) {
                     </a>
                   </motion.div>
 
-                  <div className="mt-10 flex flex-wrap items-center gap-4">
+                  <div className="mt-10 flex w-full flex-wrap items-center justify-center gap-4 lg:justify-between">
                     <button
                       onClick={prevBanner}
                       className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
@@ -411,7 +398,7 @@ export default function Hero({ games }: HeroProps) {
                     >
                       <ChevronRight className="h-5 w-5" />
                     </button>
-                    <div className="ml-auto hidden rounded-2xl border border-white/15 bg-slate-950/28 px-5 py-3 text-right text-white/82 backdrop-blur-sm lg:block">
+                    <div className="hidden rounded-2xl border border-white/15 bg-slate-950/28 px-5 py-3 text-right text-white/82 backdrop-blur-sm lg:block">
                       <div className="text-xs uppercase tracking-[0.3em] text-white/48">Hero Banner</div>
                       <div className="mt-1 text-sm">官网与客户端共用素材</div>
                     </div>
