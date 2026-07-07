@@ -277,181 +277,150 @@ export default function Hero({ games }: HeroProps) {
       </div>
 
       <div className="container-custom relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* 左侧内容 */}
-          <div>
-            {/* 标签 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm text-gray-700 rounded-full text-sm font-medium mb-8 shadow-sm"
-            >
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              已收录 100+ 精品游戏
-            </motion.div>
-
-            {/* Banner 内容 */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={banner.id}
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 30 }}
-                transition={{ duration: 0.5 }}
-              >
-                <div className={`inline-block px-3 py-1 rounded-lg text-sm font-bold text-white bg-gradient-to-r ${banner.color} mb-4`}>
-                  {banner.category || '推荐'}
-                </div>
-                <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
-                  {banner.title}
-                </h1>
-                {banner.subtitle && (
-                  <p className="mt-4 text-xl text-gray-700 font-semibold">
-                    {banner.subtitle}
-                  </p>
-                )}
-                <p className="mt-6 text-lg text-gray-600 leading-relaxed max-w-lg">
-                  {banner.desc}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* 搜索框 */}
-            <motion.form
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              onSubmit={handleSearch}
-              className="mt-8 max-w-md"
-            >
-              <div className="relative flex items-center">
-                <Search className="absolute left-4 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索游戏名称..."
-                  className="w-full pl-12 pr-32 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent shadow-lg shadow-gray-100/50 transition-all"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-2 px-5 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
-                >
-                  搜索
-                </button>
-              </div>
-            </motion.form>
-
-            {/* CTA */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="mt-8 flex flex-wrap gap-4"
-            >
-              <Link to="/games" className="btn-primary gap-2 px-6 py-3">
-                浏览游戏
-                <motion.span
-                  animate={{ x: [0, 4, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  <ArrowRight className="w-5 h-5" />
-                </motion.span>
-              </Link>
-              <a
-                href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-secondary gap-2 px-6 py-3 inline-flex items-center"
-              >
-                <Download className="w-5 h-5" />
-                下载客户端
-              </a>
-            </motion.div>
-
-            {/* Banner 切换 */}
-            <div className="mt-10 flex items-center gap-4">
-              <button
-                onClick={prevBanner}
-                className="w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-sm"
-              >
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
-              </button>
-              <div className="flex gap-2">
-                {banners.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentBanner(index)}
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      index === currentBanner ? 'w-8 bg-primary-600' : 'w-2 bg-gray-300 hover:bg-gray-400'
-                    }`}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={nextBanner}
-                className="w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-sm"
-              >
-                <ChevronRight className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-          </div>
-
-          {/* 右侧 Banner 图 */}
+        <AnimatePresence mode="wait">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="hidden lg:block"
+            key={banner.id}
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -24, scale: 0.98 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className="relative overflow-hidden rounded-[32px] border border-white/50 bg-slate-950 shadow-[0_30px_90px_rgba(15,23,42,0.22)]"
           >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={banner.id}
-                initial={{ opacity: 0, scale: 0.95, rotateY: -10 }}
-                animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-                exit={{ opacity: 0, scale: 0.95, rotateY: 10 }}
-                transition={{ duration: 0.6 }}
-                className="relative"
-              >
-                <div className="aspect-[4/1] rounded-3xl overflow-hidden shadow-2xl relative">
-                  <img
-                    src={banner.image}
-                    alt={banner.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // 图片加载失败时显示渐变占位
-                      const target = e.target as HTMLImageElement
-                      target.style.display = 'none'
-                      target.parentElement!.classList.add('bg-gradient-to-br', ...banner.color.split(' '))
-                    }}
-                  />
+            <div className="absolute inset-0 bg-slate-900" />
+            <img
+              src={banner.image}
+              alt={banner.title}
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+              }}
+            />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_32%)]" />
+            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} opacity-20`} />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/68 via-45% to-slate-950/28" />
+            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950/60 to-transparent" />
+
+            <div className="relative z-10 flex min-h-[560px] items-end lg:min-h-[620px]">
+              <div className="w-full px-6 py-8 sm:px-10 sm:py-10 lg:px-14 lg:py-14">
+                <div className="max-w-2xl rounded-[28px] border border-white/15 bg-white/10 p-6 backdrop-blur-md sm:p-8 lg:p-10">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45 }}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/12 px-4 py-2 text-sm font-medium text-white/88 shadow-lg shadow-slate-950/15"
+                  >
+                    <Sparkles className="h-4 w-4 text-amber-300" />
+                    已收录 100+ 精品游戏
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, x: -30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.05 }}
+                    className="mt-6"
+                  >
+                    <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-sm font-bold text-white shadow-lg shadow-slate-950/20 ${banner.color}`}>
+                      {banner.category || '推荐'}
+                    </div>
+                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
+                      {banner.title}
+                    </h1>
+                    {banner.subtitle && (
+                      <p className="mt-4 text-lg font-semibold text-white/92 sm:text-xl">
+                        {banner.subtitle}
+                      </p>
+                    )}
+                    <p className="mt-5 max-w-xl text-base leading-8 text-white/78 sm:text-lg">
+                      {banner.desc}
+                    </p>
+                  </motion.div>
+
+                  <motion.form
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.12 }}
+                    onSubmit={handleSearch}
+                    className="mt-8 max-w-lg"
+                  >
+                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/92 p-2 shadow-xl shadow-slate-950/15">
+                      <Search className="absolute left-5 h-5 w-5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="搜索游戏名称..."
+                        className="w-full bg-transparent py-3 pl-12 pr-32 text-gray-900 placeholder-gray-400 focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="absolute right-2 rounded-xl bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700"
+                      >
+                        搜索
+                      </button>
+                    </div>
+                  </motion.form>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="mt-8 flex flex-wrap gap-4"
+                  >
+                    <Link to="/games" className="btn-primary gap-2 px-6 py-3">
+                      浏览游戏
+                      <motion.span
+                        animate={{ x: [0, 4, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        <ArrowRight className="h-5 w-5" />
+                      </motion.span>
+                    </Link>
+                    <a
+                      href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/18"
+                    >
+                      <Download className="h-5 w-5" />
+                      下载客户端
+                    </a>
+                  </motion.div>
+
+                  <div className="mt-10 flex flex-wrap items-center gap-4">
+                    <button
+                      onClick={prevBanner}
+                      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <div className="flex gap-2">
+                      {banners.map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setCurrentBanner(index)}
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            index === currentBanner ? 'w-10 bg-white' : 'w-2 bg-white/35 hover:bg-white/55'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={nextBanner}
+                      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    <div className="ml-auto hidden rounded-2xl border border-white/15 bg-slate-950/28 px-5 py-3 text-right text-white/82 backdrop-blur-sm lg:block">
+                      <div className="text-xs uppercase tracking-[0.3em] text-white/48">Hero Banner</div>
+                      <div className="mt-1 text-sm">官网与客户端共用素材</div>
+                    </div>
+                  </div>
                 </div>
-                {/* 装饰卡片 */}
-                <motion.div
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                  className="absolute -bottom-6 -left-6 w-32 h-20 bg-white rounded-xl shadow-lg flex items-center justify-center"
-                >
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary-600">100+</div>
-                    <div className="text-xs text-gray-500">精品游戏</div>
-                  </div>
-                </motion.div>
-                <motion.div
-                  animate={{ y: [0, 10, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, delay: 1 }}
-                  className="absolute -top-4 -right-4 w-28 h-16 bg-white rounded-xl shadow-lg flex items-center justify-center"
-                >
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-green-600">小小小</div>
-                    <div className="text-xs text-gray-500">小小小游戏</div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
+              </div>
+            </div>
           </motion.div>
-        </div>
+        </AnimatePresence>
       </div>
     </section>
   )
