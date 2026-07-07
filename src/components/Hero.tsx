@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import type { Game, HeroBanner, Announcement } from '@/types'
 import { useHeroBanners, useAnnouncements } from '@/hooks/useGames'
+import { toRegionUrl } from '@/utils/region'
+import { useRegion } from '@/hooks/useRegion'
 
 const defaultAnnouncements: Announcement[] = [
   {
@@ -130,12 +132,14 @@ interface HeroProps {
 export default function Hero({ games }: HeroProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
+  const [imageFailed, setImageFailed] = useState(false)
   const [legacyAnnouncements] = useState<Announcement[]>(loadAnnouncements)
   const [currentAnnouncement, setCurrentAnnouncement] = useState(0)
   const [announcementVisible, setAnnouncementVisible] = useState(true) // 公告可见状态
   const [legacyBanners] = useState<HeroBanner[]>(loadLegacyHeroBanners)
   const { heroBanners } = useHeroBanners()
   const { announcements: remoteAnnouncements } = useAnnouncements()
+  const region = useRegion()
   const navigate = useNavigate()
 
   const gameBanners = deriveGameBanners(games)
@@ -197,6 +201,11 @@ export default function Hero({ games }: HeroProps) {
   }
 
   const banner = banners[currentBanner]
+  const heroImage = banner.image ? toRegionUrl(banner.image, region) : ''
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [heroImage, banner.id])
 
   return (
     <section className="relative overflow-hidden min-h-[85vh] flex items-center pt-8">
@@ -272,27 +281,26 @@ export default function Hero({ games }: HeroProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.98 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="relative min-h-[72vh] w-full overflow-hidden"
+            className="relative min-h-[62vh] w-full overflow-hidden lg:min-h-[66vh]"
           >
             <div className="absolute inset-0 bg-slate-900" />
-            <img
-              src={banner.image}
-              alt={banner.title}
-              className="absolute inset-0 h-full w-full object-cover object-center"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = 'none'
-              }}
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18),transparent_45%)]" />
-            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} opacity-16`} />
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/12 to-slate-950/72" />
-            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/70 via-slate-950/36 to-transparent" />
+            {heroImage && !imageFailed && (
+              <img
+                src={heroImage}
+                alt={banner.title}
+                className="absolute inset-0 h-full w-full object-cover object-center"
+                onError={() => setImageFailed(true)}
+              />
+            )}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12),transparent_42%)]" />
+            <div className={`absolute inset-0 bg-gradient-to-br ${banner.color} ${imageFailed ? 'opacity-30' : 'opacity-12'}`} />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/58 via-slate-950/28 to-slate-950/18" />
+            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-slate-950/48 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/36 to-transparent" />
 
-            <div className="relative z-10 flex min-h-[72vh] items-end">
-              <div className="container-custom w-full px-6 pb-12 sm:pb-14 lg:pb-16">
-                <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+            <div className="relative z-10 flex min-h-[62vh] items-center lg:min-h-[66vh]">
+              <div className="container-custom w-full px-6 py-12 sm:py-14 lg:py-16">
+                <div className="flex w-full max-w-2xl flex-col items-start text-left">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -307,20 +315,20 @@ export default function Hero({ games }: HeroProps) {
                     initial={{ opacity: 0, x: -30 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.5, delay: 0.05 }}
-                    className="mt-6 flex flex-col items-center"
+                    className="mt-6 flex flex-col items-start"
                   >
                     <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-sm font-bold text-white shadow-lg shadow-slate-950/20 ${banner.color}`}>
                       {banner.category || '推荐'}
                     </div>
-                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-7xl">
+                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-6xl">
                       {banner.title}
                     </h1>
                     {banner.subtitle && (
-                      <p className="mt-4 text-lg font-semibold text-white/92 sm:text-xl">
+                      <p className="mt-3 text-lg font-semibold text-white/92 sm:text-xl">
                         {banner.subtitle}
                       </p>
                     )}
-                    <p className="mt-5 max-w-2xl text-base leading-8 text-white/82 sm:text-lg">
+                    <p className="mt-4 max-w-xl text-sm leading-7 text-white/78 sm:text-base">
                       {banner.desc}
                     </p>
                   </motion.div>
@@ -330,7 +338,7 @@ export default function Hero({ games }: HeroProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.12 }}
                     onSubmit={handleSearch}
-                    className="mt-8 w-full max-w-xl"
+                    className="mt-7 w-full max-w-xl"
                   >
                     <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/92 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
                       <Search className="absolute left-5 h-5 w-5 text-slate-400" />
@@ -354,7 +362,7 @@ export default function Hero({ games }: HeroProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="mt-8 flex flex-wrap justify-center gap-4"
+                    className="mt-7 flex flex-wrap gap-4"
                   >
                     <Link to="/games" className="btn-primary gap-2 px-6 py-3">
                       浏览游戏
@@ -376,14 +384,14 @@ export default function Hero({ games }: HeroProps) {
                     </a>
                   </motion.div>
 
-                  <div className="mt-10 flex w-full flex-wrap items-center justify-center gap-4 lg:justify-between">
-                    <button
-                      onClick={prevBanner}
-                      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <div className="flex gap-2">
+                  <div className="mt-9 flex w-full flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={prevBanner}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
                       {banners.map((_, index) => (
                         <button
                           key={index}
@@ -393,16 +401,12 @@ export default function Hero({ games }: HeroProps) {
                           }`}
                         />
                       ))}
-                    </div>
-                    <button
-                      onClick={nextBanner}
-                      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    <div className="hidden rounded-2xl border border-white/15 bg-slate-950/28 px-5 py-3 text-right text-white/82 backdrop-blur-sm lg:block">
-                      <div className="text-xs uppercase tracking-[0.3em] text-white/48">Hero Banner</div>
-                      <div className="mt-1 text-sm">官网与客户端共用素材</div>
+                      <button
+                        onClick={nextBanner}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/18"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
                     </div>
                   </div>
                 </div>
