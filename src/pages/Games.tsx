@@ -24,11 +24,11 @@ export default function Games() {
     setSelectedCategory(c)
   }, [searchParams])
 
-  // 排序：active(上架) > maintenance(维护) > inactive(下架)
-  const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
+  // 公共列表完全按添加时间排序；维护状态只影响下载操作，不改变时间顺序。
   const sortedGames = [...games].sort((a, b) => {
-    const orderDiff = (statusOrder[a.status || 'inactive'] || 4) - (statusOrder[b.status || 'inactive'] || 4)
-    return orderDiff !== 0 ? orderDiff : 0
+    const bTime = Date.parse(b.createdAt || '') || 0
+    const aTime = Date.parse(a.createdAt || '') || 0
+    return bTime - aTime || b.id - a.id
   })
 
   const filteredGames = sortedGames.filter((game) => {

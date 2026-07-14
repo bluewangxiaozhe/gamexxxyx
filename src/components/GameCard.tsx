@@ -13,6 +13,7 @@ interface GameCardProps {
 export default function GameCard({ game, index = 0 }: GameCardProps) {
   const region = useRegion()
   const imageUrl = toRegionUrl(game.imageUrl, region)
+  const isMaintenance = game.status === 'maintenance'
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -49,6 +50,13 @@ export default function GameCard({ game, index = 0 }: GameCardProps) {
                 {game.category}
               </span>
             </div>
+            {isMaintenance && (
+              <div className="absolute top-3 right-3">
+                <span className="px-3 py-1 bg-amber-500/90 text-white text-xs rounded-full">
+                  维护中
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="p-5">
@@ -65,6 +73,10 @@ export default function GameCard({ game, index = 0 }: GameCardProps) {
             <p className="mt-3 text-sm text-gray-500 line-clamp-2 leading-relaxed">
               {game.description}
             </p>
+
+            {isMaintenance && (
+              <p className="mt-3 text-sm font-medium text-amber-600">当前维护中，暂不提供下载。</p>
+            )}
 
             <div className="mt-4 flex items-center justify-between text-sm">
               <div className="flex items-center gap-3 text-gray-400">

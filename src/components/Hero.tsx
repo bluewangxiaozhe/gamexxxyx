@@ -316,7 +316,7 @@ export default function Hero({ games }: HeroProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.12 }}
                     onSubmit={handleSearch}
-                    className="mt-7 w-full max-w-xl"
+                    className="mt-7 w-full max-w-[460px]"
                   >
                     <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/90 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
                       <Search className="absolute left-5 h-5 w-5 text-slate-400" />
@@ -325,11 +325,11 @@ export default function Hero({ games }: HeroProps) {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="搜索游戏名称..."
-                        className="w-full bg-transparent py-3 pl-12 pr-32 text-gray-900 placeholder-gray-400 focus:outline-none"
+                        className="w-full bg-transparent py-3 pl-12 pr-28 text-gray-900 placeholder-gray-400 focus:outline-none"
                       />
                       <button
                         type="submit"
-                        className="absolute right-2 rounded-xl bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700"
+                        className="absolute right-2 rounded-xl bg-primary-600 px-4 py-3 font-medium text-white transition-colors hover:bg-primary-700"
                       >
                         搜索
                       </button>

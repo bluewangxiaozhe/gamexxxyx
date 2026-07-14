@@ -221,12 +221,12 @@ export default function Admin() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
-  const { games, loading, refetch } = useGames()
+  const { games, loading, refetch } = useGames(true)
 
-  const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
   const sortedGames = [...games].sort((a, b) => {
-    const orderDiff = (statusOrder[a.status || 'inactive'] || 4) - (statusOrder[b.status || 'inactive'] || 4)
-    return orderDiff !== 0 ? orderDiff : 0
+    const bTime = Date.parse(b.createdAt || '') || 0
+    const aTime = Date.parse(a.createdAt || '') || 0
+    return bTime - aTime || b.id - a.id
   })
 
   const [editingGame, setEditingGame] = useState<Game | null>(null)

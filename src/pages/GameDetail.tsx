@@ -16,6 +16,7 @@ export default function GameDetail() {
   const dropRateUrl = game?.dropRateUrl?.trim() || DEFAULT_DROP_RATE_URL
   const imageUrl = game ? toRegionUrl(game.imageUrl, region) : ''
   const downloadUrl = game ? toRegionUrl(game.downloadUrl, region) : ''
+  const isMaintenance = game?.status === 'maintenance'
 
   if (loading) {
     return (
@@ -92,15 +93,22 @@ export default function GameDetail() {
                 <span className="text-2xl font-bold">{game.rating}</span>
               </div>
 
-              <a
-                href={downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary w-full gap-2"
-              >
-                <Download className="w-5 h-5" />
-                立即下载
-              </a>
+              {isMaintenance ? (
+                <span className="btn-secondary w-full gap-2 cursor-not-allowed opacity-60">
+                  <Download className="w-5 h-5" />
+                  维护中，暂不可下载
+                </span>
+              ) : (
+                <a
+                  href={downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary w-full gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  立即下载
+                </a>
+              )}
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
                 {guideUrl ? (
                   <a

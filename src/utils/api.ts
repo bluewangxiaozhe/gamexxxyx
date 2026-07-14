@@ -83,7 +83,7 @@ async function checkAuth(token: string): Promise<boolean> {
 
 export const api = {
   checkAuth,
-  getGames: () => request<Game[]>('/games'),
+  getGames: (includeInactive = false) => request<Game[]>(`/games${includeInactive ? '?includeInactive=true' : ''}`),
   getGame: (id: number) => request<Game>(`/games/${id}`),
   getGamesByCategory: (category: string) => request<Game[]>(`/games?category=${encodeURIComponent(category)}`),
   searchGames: (query: string) => request<Game[]>(`/games/search?q=${encodeURIComponent(query)}`),

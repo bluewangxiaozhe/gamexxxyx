@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Game, HeroBanner, Announcement } from '@/types'
 import { api } from '@/utils/api'
 
-export function useGames() {
+export function useGames(includeInactive = false) {
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -10,14 +10,14 @@ export function useGames() {
   const fetchGames = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const response = await api.getGames()
+    const response = await api.getGames(includeInactive)
     if (response.success && response.data) {
       setGames(response.data)
     } else {
       setError(response.message || '获取游戏列表失败')
     }
     setLoading(false)
-  }, [])
+  }, [includeInactive])
 
   useEffect(() => {
     fetchGames()

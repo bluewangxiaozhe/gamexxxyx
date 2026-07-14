@@ -317,8 +317,7 @@ app.get('/api/games', (req, res) => {
   const where = [];
 
   if (includeInactive !== 'true') {
-    where.push('status = ?');
-    params.push('active');
+    where.push("status != 'inactive'");
   }
 
   if (category) {
@@ -338,7 +337,7 @@ app.get('/api/games', (req, res) => {
 app.get('/api/categories', (req, res) => {
   const rows = db.prepare(`
     SELECT DISTINCT category FROM games
-    WHERE status = 'active' AND category != ''
+    WHERE status != 'inactive' AND category != ''
     ORDER BY category ASC
   `).all();
 
@@ -377,16 +376,16 @@ app.get('/api/games/search', (req, res) => {
   const like = `%${q}%`;
   const rows = db.prepare(`
     SELECT * FROM games
-    WHERE status = 'active'
+    WHERE status != 'inactive'
       AND (name LIKE ? OR description LIKE ? OR category LIKE ? OR tags LIKE ?)
-    ORDER BY downloads DESC, id DESC
+    ORDER BY datetime(createdAt) DESC, id DESC
   `).all(like, like, like, like);
 
   res.json(rows.map(serializeGame));
 });
 
 app.get('/api/games/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
+  const row = db.prepare("SELECT * FROM games WHERE id = ? AND status != 'inactive'").get(req.params.id);
   if (!row) {
     res.status(404).json({ success: false, message: 'Game not found' });
     return;

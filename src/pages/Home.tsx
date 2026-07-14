@@ -5,24 +5,19 @@ import Features from '@/components/Features'
 import DownloadCTA from '@/components/DownloadCTA'
 import { useGames } from '@/hooks/useGames'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Flame } from 'lucide-react'
+import { ArrowRight, Clock3 } from 'lucide-react'
 
 export default function Home() {
   const { games, loading, error } = useGames()
 
-  // 排序：active(上架) > maintenance(维护) > inactive(下架)
-  const statusOrder: Record<string, number> = { active: 1, maintenance: 2, inactive: 3 }
+  // 公共列表完全按添加时间排序；维护状态只影响下载操作，不改变时间顺序。
   const sortedGames = [...games].sort((a, b) => {
-    const orderDiff = (statusOrder[a.status || 'inactive'] || 4) - (statusOrder[b.status || 'inactive'] || 4)
-    if (orderDiff !== 0) return orderDiff
-
-    const heatDiff = (b.heat || 0) - (a.heat || 0)
-    if (heatDiff !== 0) return heatDiff
-
-    return b.downloads - a.downloads
+    const bTime = Date.parse(b.createdAt || '') || 0
+    const aTime = Date.parse(a.createdAt || '') || 0
+    return bTime - aTime || b.id - a.id
   })
 
-  const hotGames = sortedGames.slice(0, 8)
+  const latestGames = sortedGames.slice(0, 8)
 
   return (
     <div>
@@ -32,15 +27,15 @@ export default function Home() {
       {/* 2. 分类导航 */}
       <CategoryNav />
 
-      {/* 3. 热门游戏（唯一卡片区） */}
+      {/* 3. 最新游戏（唯一卡片区） */}
       <section className="py-20 bg-gray-50">
         <div className="container-custom">
           <div className="flex items-center justify-between mb-10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                <Flame className="w-5 h-5 text-red-500" />
+              <div className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center">
+                <Clock3 className="w-5 h-5 text-primary-600" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900">热门游戏</h2>
+              <h2 className="text-2xl font-bold text-gray-900">最新游戏</h2>
             </div>
             <Link
               to="/games"
@@ -51,7 +46,7 @@ export default function Home() {
             </Link>
           </div>
 
-          <GameGrid games={hotGames} loading={loading} error={error} />
+          <GameGrid games={latestGames} loading={loading} error={error} />
         </div>
       </section>
 
