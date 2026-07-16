@@ -139,19 +139,6 @@ export default function Navbar() {
                   </Link>
                 </motion.div>
               ))}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <Link
-                  to="/admin"
-                  className="block px-4 py-3 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  管理后台
-                </Link>
-              </motion.div>
             </div>
           </motion.div>
         )}

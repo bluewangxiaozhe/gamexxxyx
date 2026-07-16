@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import type { Game, HeroBanner, Announcement } from '@/types'
 import { useHeroBanners, useAnnouncements } from '@/hooks/useGames'
+import { useClientUpdate } from '@/hooks/useClientUpdate'
 import { toRegionUrl } from '@/utils/region'
 import { useRegion } from '@/hooks/useRegion'
 
@@ -150,6 +151,7 @@ export default function Hero({ games }: HeroProps) {
   const [legacyBanners] = useState<HeroBanner[]>(loadLegacyHeroBanners)
   const { heroBanners } = useHeroBanners()
   const { announcements: remoteAnnouncements } = useAnnouncements()
+  const { update: clientUpdate, loading: clientUpdateLoading } = useClientUpdate()
   const region = useRegion()
   const navigate = useNavigate()
 
@@ -261,8 +263,8 @@ export default function Hero({ games }: HeroProps) {
             <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-slate-950/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-950/30 to-transparent" />
 
-            <div className="relative z-10 flex min-h-[640px] items-center lg:min-h-[700px]">
-              <div className="container-custom w-full px-6 py-10 sm:py-12 lg:py-14">
+            <div className="relative z-10 flex min-h-[560px] items-center sm:min-h-[640px] lg:min-h-[700px]">
+              <div className="container-custom w-full px-5 py-8 sm:px-6 sm:py-12 lg:py-14">
                 <div className="flex w-full max-w-2xl flex-col items-start text-left">
                   <AnimatePresence mode="wait">
                     {currentNotice && announcementVisible && (
@@ -301,7 +303,7 @@ export default function Hero({ games }: HeroProps) {
                     <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-sm font-bold text-white shadow-lg shadow-slate-950/20 ${banner.color}`}>
                       {banner.category || '推荐'}
                     </div>
-                    <h1 className="mt-5 text-4xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-6xl">
+                    <h1 className="mt-5 text-3xl font-bold leading-tight text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.35)] sm:text-5xl lg:text-6xl">
                       {banner.title}
                     </h1>
                     {supportText && (
@@ -318,18 +320,18 @@ export default function Hero({ games }: HeroProps) {
                     onSubmit={handleSearch}
                     className="mt-7 w-full max-w-[460px]"
                   >
-                    <div className="relative flex items-center rounded-2xl border border-white/20 bg-white/90 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
+                    <div className="relative flex items-center gap-2 rounded-2xl border border-white/20 bg-white/90 p-2 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
                       <Search className="absolute left-5 h-5 w-5 text-slate-400" />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="搜索游戏名称..."
-                        className="w-full bg-transparent py-3 pl-12 pr-28 text-gray-900 placeholder-gray-400 focus:outline-none"
+                        className="min-w-0 flex-1 bg-transparent py-3 pl-12 text-gray-900 placeholder-gray-400 focus:outline-none"
                       />
                       <button
                         type="submit"
-                        className="absolute right-2 rounded-xl bg-primary-600 px-4 py-3 font-medium text-white transition-colors hover:bg-primary-700"
+                        className="shrink-0 rounded-xl bg-primary-600 px-4 py-3 font-medium text-white transition-colors hover:bg-primary-700"
                       >
                         搜索
                       </button>
@@ -340,9 +342,9 @@ export default function Hero({ games }: HeroProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="mt-7 flex flex-wrap gap-4"
+                    className="mt-6 flex w-full flex-col gap-3 sm:mt-7 sm:w-auto sm:flex-row sm:flex-wrap sm:gap-4"
                   >
-                    <Link to="/games" className="btn-primary gap-2 px-6 py-3">
+                    <Link to="/games" className="btn-primary w-full justify-center gap-2 px-6 py-3 sm:w-auto">
                       浏览游戏
                       <motion.span
                         animate={{ x: [0, 4, 0] }}
@@ -351,15 +353,22 @@ export default function Hero({ games }: HeroProps) {
                         <ArrowRight className="h-5 w-5" />
                       </motion.span>
                     </Link>
-                    <a
-                      href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20"
-                    >
-                      <Download className="h-5 w-5" />
-                      下载客户端
-                    </a>
+                    {clientUpdate ? (
+                      <a
+                        href={clientUpdate.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20 sm:w-auto"
+                      >
+                        <Download className="h-5 w-5" />
+                        下载客户端
+                      </a>
+                    ) : (
+                      <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-3 font-medium text-white/60 sm:w-auto" aria-disabled="true">
+                        <Download className="h-5 w-5" />
+                        {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                      </span>
+                    )}
                   </motion.div>
 
                   <div className="mt-9 flex w-full flex-wrap items-center gap-4">

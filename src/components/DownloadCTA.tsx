@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Download, Monitor, CheckCircle } from 'lucide-react'
+import { useClientUpdate } from '@/hooks/useClientUpdate'
 
 const features = [
   '海量游戏',
@@ -9,6 +10,8 @@ const features = [
 ]
 
 export default function DownloadCTA() {
+  const { update: clientUpdate, loading: clientUpdateLoading } = useClientUpdate()
+
   return (
     <section className="py-20 bg-gray-900 text-white overflow-hidden relative">
       {/* 背景装饰 */}
@@ -43,19 +46,26 @@ export default function DownloadCTA() {
                 ))}
               </ul>
 
-              <a
-                href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl font-bold text-lg transition-colors"
-              >
-                <Monitor className="w-6 h-6" />
-                下载 Windows 客户端
-                <span className="text-sm font-normal text-primary-200">v2.0.0</span>
-              </a>
+              {clientUpdate ? (
+                <a
+                  href={clientUpdate.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl font-bold text-lg transition-colors"
+                >
+                  <Monitor className="w-6 h-6" />
+                  下载 Windows 客户端
+                  <span className="text-sm font-normal text-primary-200">v{clientUpdate.version}</span>
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-3 px-8 py-4 bg-gray-700 rounded-2xl font-bold text-lg text-gray-300" aria-disabled="true">
+                  <Monitor className="w-6 h-6" />
+                  {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                </span>
+              )}
 
               <p className="mt-4 text-sm text-gray-500">
-                支持 Windows 7 / 10 / 11 · 文件大小约 15MB
+                安装前请确认系统满足客户端要求
               </p>
             </motion.div>
 
@@ -148,16 +158,23 @@ export default function DownloadCTA() {
               <p className="text-gray-400 text-sm mb-6">海量游戏一键下载安装</p>
               
               {/* 下载按钮 */}
-              <a
-                href="https://oss.567zm.com/game/%E5%B0%8F%E5%B0%8F%E5%B0%8F%E6%B8%B8%E6%88%8F.exe"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full px-6 py-4 bg-primary-600 hover:bg-primary-700 rounded-xl font-bold text-lg transition-colors mb-6"
-              >
-                <Monitor className="w-6 h-6" />
-                立即下载
-                <span className="text-sm font-normal text-primary-200">v2.0.0</span>
-              </a>
+              {clientUpdate ? (
+                <a
+                  href={clientUpdate.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full px-6 py-4 bg-primary-600 hover:bg-primary-700 rounded-xl font-bold text-lg transition-colors mb-6"
+                >
+                  <Monitor className="w-6 h-6" />
+                  立即下载
+                  <span className="text-sm font-normal text-primary-200">v{clientUpdate.version}</span>
+                </a>
+              ) : (
+                <span className="inline-flex items-center justify-center gap-2 w-full px-6 py-4 bg-gray-700 rounded-xl font-bold text-lg text-gray-300 mb-6" aria-disabled="true">
+                  <Monitor className="w-6 h-6" />
+                  {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                </span>
+              )}
               
               {/* 简化特性标签 */}
               <div className="flex flex-wrap justify-center gap-2">
@@ -173,7 +190,7 @@ export default function DownloadCTA() {
               </div>
               
               <p className="mt-4 text-xs text-gray-500">
-                支持 Windows 7 / 10 / 11 · 15MB
+                安装前请确认系统满足客户端要求
               </p>
             </motion.div>
           </div>
