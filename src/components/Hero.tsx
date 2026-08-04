@@ -8,6 +8,8 @@ import { useClientUpdate } from '@/hooks/useClientUpdate'
 import { toRegionUrl } from '@/utils/region'
 import { useRegion } from '@/hooks/useRegion'
 
+const BANNER_AUTOPLAY_DELAY = 5000
+
 const defaultAnnouncements: Announcement[] = [
   {
     id: 1,
@@ -143,6 +145,7 @@ function getAlternateImageUrl(url: string): string {
 export default function Hero({ games }: HeroProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentBanner, setCurrentBanner] = useState(0)
+  const [isBannerPaused, setIsBannerPaused] = useState(false)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageAttempt, setImageAttempt] = useState(0)
   const [legacyAnnouncements] = useState<Announcement[]>(loadAnnouncements)
@@ -162,6 +165,8 @@ export default function Hero({ games }: HeroProps) {
   const announcements = remoteAnnouncements.length > 0
     ? remoteAnnouncements
     : (legacyAnnouncements.length > 0 ? legacyAnnouncements : defaultAnnouncements)
+  const banner = banners[currentBanner] ?? banners[0]
+  const bannerAutoplayKey = JSON.stringify([banner.id, banner.title, banner.subtitle, banner.desc, banner.image])
 
   const nextBanner = useCallback(() => {
     setCurrentBanner((prev) => (prev + 1) % banners.length)
@@ -190,9 +195,11 @@ export default function Hero({ games }: HeroProps) {
   }, [announcements.length])
 
   useEffect(() => {
-    const timer = setInterval(nextBanner, 5000)
-    return () => clearInterval(timer)
-  }, [nextBanner])
+    if (isBannerPaused || banners.length <= 1) return
+
+    const timer = setTimeout(nextBanner, BANNER_AUTOPLAY_DELAY)
+    return () => clearTimeout(timer)
+  }, [bannerAutoplayKey, banners.length, currentBanner, isBannerPaused, nextBanner])
 
   useEffect(() => {
     if (currentBanner >= banners.length) {
@@ -213,7 +220,6 @@ export default function Hero({ games }: HeroProps) {
     }
   }
 
-  const banner = banners[currentBanner]
   const heroImageCandidates = banner.image
     ? Array.from(new Set([
         toRegionUrl(banner.image, region),
@@ -231,7 +237,11 @@ export default function Hero({ games }: HeroProps) {
   }, [banner.image, banner.id, region])
 
   return (
-    <section className="relative overflow-hidden bg-slate-950">
+    <section
+      className="relative overflow-hidden bg-slate-950"
+      onMouseEnter={() => setIsBannerPaused(true)}
+      onMouseLeave={() => setIsBannerPaused(false)}
+    >
       <div className="relative z-10 w-full">
         <AnimatePresence mode="wait">
           <motion.div
