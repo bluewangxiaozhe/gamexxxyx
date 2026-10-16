@@ -1,10 +1,10 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api, setAdminToken, clearAdminToken, getAdminToken } from '@/utils/api'
-import type { Game, GameBanner, HeroBanner, Announcement } from '@/types'
+import type { Game, GameBanner, HeroBanner, Announcement, LauncherRelease } from '@/types'
 import UppyUploader from '@/components/UppyUploader'
 
 function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
@@ -105,12 +105,86 @@ interface GameForm {
   downloads: number
   status: 'active' | 'inactive' | 'maintenance'
   tags: string
+  installDirectoryName: string
+  launcherRelativePath: string
+  launchMode: '' | 'portable' | 'fixed-root-junction'
+  fixedLaunchDirectoryName: string
+  launcherManifestUrl: string
+  launcherUpdatePolicy: '' | 'notify' | 'automatic' | 'required'
 }
 
 interface FileData {
   url: string
   filename?: string
   size?: number
+  sha256?: string
+  launcherSha256?: string
+}
+
+interface LauncherReleaseForm {
+  id?: number
+  version: string
+  packageUrl: string
+  packageFormat: 'zip' | 'exe'
+  size: string
+  sha256: string
+  launcherSha256: string
+  signature: string
+  signatureAlgorithm: string
+  keyId: string
+  launcherRelativePath: string
+  launchMode: '' | 'portable' | 'fixed-root-junction'
+  fixedLaunchDirectoryName: string
+  mandatory: boolean
+  minBoxVersion: string
+  preservePaths: string
+  notes: string
+  published: boolean
+}
+
+function createEmptyLauncherReleaseForm(): LauncherReleaseForm {
+  return {
+    version: '',
+    packageUrl: '',
+    packageFormat: 'zip',
+    size: '',
+    sha256: '',
+    launcherSha256: '',
+    signature: '',
+    signatureAlgorithm: '',
+    keyId: '',
+    launcherRelativePath: '',
+    launchMode: '',
+    fixedLaunchDirectoryName: '',
+    mandatory: false,
+    minBoxVersion: '',
+    preservePaths: '',
+    notes: '',
+    published: true,
+  }
+}
+
+function launcherReleaseToForm(release: LauncherRelease): LauncherReleaseForm {
+  return {
+    id: release.id,
+    version: release.version,
+    packageUrl: release.packageUrl,
+    packageFormat: release.packageFormat,
+    size: String(release.size),
+    sha256: release.sha256,
+    launcherSha256: release.launcherSha256 || '',
+    signature: release.signature || '',
+    signatureAlgorithm: release.signatureAlgorithm || '',
+    keyId: release.keyId || '',
+    launcherRelativePath: release.launcherRelativePath || '',
+    launchMode: release.launchMode || '',
+    fixedLaunchDirectoryName: release.fixedLaunchDirectoryName || '',
+    mandatory: release.mandatory,
+    minBoxVersion: release.minBoxVersion || '',
+    preservePaths: release.preservePaths.join('\n'),
+    notes: release.notes || '',
+    published: release.published,
+  }
 }
 
 function formatSizeForDisplay(bytes: number): string {
@@ -166,6 +240,12 @@ function createEmptyForm(): GameForm {
     downloads: 100,
     status: 'active',
     tags: '',
+    installDirectoryName: '',
+    launcherRelativePath: '',
+    launchMode: 'portable',
+    fixedLaunchDirectoryName: '',
+    launcherManifestUrl: '',
+    launcherUpdatePolicy: '',
   }
 }
 
@@ -192,6 +272,12 @@ function gameToForm(game: Game): GameForm {
     downloads: game.downloads,
     status: game.status || 'active',
     tags: Array.isArray(game.tags) ? game.tags.join(', ') : (game.tags || ''),
+    installDirectoryName: game.installDirectoryName || '',
+    launcherRelativePath: game.launcherRelativePath || '',
+    launchMode: game.launchMode || '',
+    fixedLaunchDirectoryName: game.fixedLaunchDirectoryName || '',
+    launcherManifestUrl: game.launcherManifestUrl || '',
+    launcherUpdatePolicy: game.launcherUpdatePolicy || '',
   }
 }
 
@@ -213,6 +299,12 @@ function formToGame(form: GameForm): Omit<Game, 'id' | 'addedAt'> {
     downloads: Number(form.downloads) || 0,
     status: form.status,
     tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+    installDirectoryName: form.installDirectoryName.trim(),
+    launcherRelativePath: form.launcherRelativePath.trim(),
+    launchMode: form.launchMode,
+    fixedLaunchDirectoryName: form.fixedLaunchDirectoryName.trim(),
+    launcherManifestUrl: form.launcherManifestUrl.trim(),
+    launcherUpdatePolicy: form.launcherUpdatePolicy,
   }
 }
 
@@ -234,6 +326,12 @@ export default function Admin() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [showGameForm, setShowGameForm] = useState(false)
+  const [launcherReleases, setLauncherReleases] = useState<LauncherRelease[]>([])
+  const [launcherReleaseForm, setLauncherReleaseForm] = useState<LauncherReleaseForm>(createEmptyLauncherReleaseForm())
+  const launcherReleaseFormRef = useRef(launcherReleaseForm)
+  launcherReleaseFormRef.current = launcherReleaseForm
+  const [launcherReleaseLoading, setLauncherReleaseLoading] = useState(false)
+  const [launcherReleaseMessage, setLauncherReleaseMessage] = useState('')
 
   const [banners, setBanners] = useState<HeroBanner[]>([])
   const [bannerTab, setBannerTab] = useState(false)
@@ -366,6 +464,10 @@ export default function Admin() {
     setForm(gameToForm(game))
     setShowGameForm(true)
     setMessage('')
+    setLauncherReleaseForm(createEmptyLauncherReleaseForm())
+    setLauncherReleaseMessage('')
+    setLauncherReleases([])
+    void fetchLauncherReleases(game.id)
   }
 
   const closeGameForm = () => {
@@ -373,6 +475,134 @@ export default function Admin() {
     setEditingGame(null)
     setForm(createEmptyForm())
     setMessage('')
+    setLauncherReleases([])
+    setLauncherReleaseForm(createEmptyLauncherReleaseForm())
+    setLauncherReleaseMessage('')
+  }
+
+  const fetchLauncherReleases = async (gameId: number) => {
+    setLauncherReleaseLoading(true)
+    const response = await api.getLauncherReleases(gameId)
+    if (response.success && response.data) {
+      setLauncherReleases(response.data)
+      setLauncherReleaseMessage('')
+    } else {
+      setLauncherReleaseMessage(response.message || '获取登录器版本失败')
+    }
+    setLauncherReleaseLoading(false)
+  }
+
+  const handleLauncherPackageUpload = (data: FileData) => {
+    setLauncherReleaseForm(current => ({
+      ...current,
+      packageUrl: data.url,
+      size: data.size ? String(data.size) : '',
+      sha256: data.sha256 || '',
+      launcherSha256: '',
+      packageFormat: data.filename?.toLowerCase().endsWith('.exe') ? 'exe' : 'zip',
+    }))
+  }
+
+  const inspectLauncherPackage = async () => {
+    if (!launcherReleaseForm.packageUrl.trim() || !launcherReleaseForm.launcherRelativePath.trim()) {
+      setLauncherReleaseMessage('请先填写安装包 HTTPS 地址和入口相对路径')
+      return
+    }
+    setLauncherReleaseLoading(true)
+    const inspectedPackage = {
+      packageUrl: launcherReleaseForm.packageUrl.trim(),
+      packageFormat: launcherReleaseForm.packageFormat,
+      launcherRelativePath: launcherReleaseForm.launcherRelativePath.trim(),
+    }
+    const response = await api.inspectLauncherPackage(inspectedPackage)
+    const current = launcherReleaseFormRef.current
+    if (current.packageUrl.trim() !== inspectedPackage.packageUrl
+      || current.packageFormat !== inspectedPackage.packageFormat
+      || current.launcherRelativePath.trim() !== inspectedPackage.launcherRelativePath) {
+      setLauncherReleaseMessage('安装包配置已变化，请重新计算校验值')
+      setLauncherReleaseLoading(false)
+      return
+    }
+    if (response.success && response.data) {
+      setLauncherReleaseForm(current => ({
+        ...current,
+        size: String(response.data!.size),
+        sha256: response.data!.sha256,
+        launcherSha256: response.data!.launcherSha256,
+      }))
+      setLauncherReleaseMessage('安装包大小和 SHA-256 已计算')
+    } else {
+      setLauncherReleaseMessage(response.message || '计算安装包校验值失败')
+    }
+    setLauncherReleaseLoading(false)
+  }
+
+  const handleSaveLauncherRelease = async () => {
+    if (!editingGame) return
+    const size = Number(launcherReleaseForm.size)
+    const preservePaths = launcherReleaseForm.preservePaths
+      .split(/\r?\n/)
+      .map(path => path.trim())
+      .filter(Boolean)
+    if (!launcherReleaseForm.version.trim() || !launcherReleaseForm.packageUrl.trim()
+      || !launcherReleaseForm.launcherRelativePath.trim() || !launcherReleaseForm.sha256.trim()
+      || !launcherReleaseForm.launcherSha256.trim()) {
+      setLauncherReleaseMessage('请填写版本、安装包地址、入口路径、包 SHA-256 和入口 SHA-256')
+      return
+    }
+    if (!Number.isInteger(size) || size <= 0) {
+      setLauncherReleaseMessage('安装包大小必须是正整数，上传后可自动填入')
+      return
+    }
+    if (launcherReleaseForm.launchMode === 'fixed-root-junction' && !launcherReleaseForm.fixedLaunchDirectoryName.trim()) {
+      setLauncherReleaseMessage('固定目录模式必须填写固定目录名')
+      return
+    }
+
+    setLauncherReleaseLoading(true)
+    setLauncherReleaseMessage('')
+    const payload = {
+      version: launcherReleaseForm.version.trim(),
+      packageUrl: launcherReleaseForm.packageUrl.trim(),
+      packageFormat: launcherReleaseForm.packageFormat,
+      size,
+      sha256: launcherReleaseForm.sha256.trim().toLowerCase(),
+      launcherSha256: launcherReleaseForm.launcherSha256.trim().toLowerCase(),
+      signature: launcherReleaseForm.signature.trim(),
+      signatureAlgorithm: launcherReleaseForm.signatureAlgorithm.trim(),
+      keyId: launcherReleaseForm.keyId.trim(),
+      launcherRelativePath: launcherReleaseForm.launcherRelativePath.trim(),
+      launchMode: launcherReleaseForm.launchMode,
+      fixedLaunchDirectoryName: launcherReleaseForm.fixedLaunchDirectoryName.trim(),
+      mandatory: launcherReleaseForm.mandatory,
+      minBoxVersion: launcherReleaseForm.minBoxVersion.trim(),
+      preservePaths,
+      notes: launcherReleaseForm.notes.trim(),
+      published: launcherReleaseForm.published,
+    }
+    const response = launcherReleaseForm.id
+      ? await api.updateLauncherRelease(launcherReleaseForm.id, payload)
+      : await api.createLauncherRelease(editingGame.id, payload)
+    if (response.success) {
+      await fetchLauncherReleases(editingGame.id)
+      setLauncherReleaseForm(createEmptyLauncherReleaseForm())
+      setLauncherReleaseMessage(launcherReleaseForm.published ? '登录器版本已保存并发布' : '登录器版本已保存为草稿')
+    } else {
+      setLauncherReleaseMessage(response.message || '保存登录器版本失败')
+      setLauncherReleaseLoading(false)
+    }
+  }
+
+  const handleDeleteLauncherRelease = (release: LauncherRelease) => {
+    showConfirm('删除登录器版本', `确定删除登录器版本 ${release.version} 吗？`, async () => {
+      const response = await api.deleteLauncherRelease(release.id)
+      if (response.success && editingGame) {
+        await fetchLauncherReleases(editingGame.id)
+        setLauncherReleaseMessage('登录器版本已删除')
+      } else {
+        setLauncherReleaseMessage(response.message || '删除登录器版本失败')
+      }
+    })
   }
 
   const openAddBanner = () => {
@@ -568,6 +798,22 @@ export default function Admin() {
     }
     if (!form.downloadUrl.trim()) {
       setMessage('请输入下载地址')
+      return
+    }
+    if (!editingGame && !form.installDirectoryName.trim()) {
+      setMessage('新游戏必须填写安装目录名')
+      return
+    }
+    if (!editingGame && !form.launcherRelativePath.trim()) {
+      setMessage('新游戏必须填写登录器入口相对路径')
+      return
+    }
+    if (!editingGame && !form.launchMode) {
+      setMessage('新游戏必须选择启动模式')
+      return
+    }
+    if (form.launchMode === 'fixed-root-junction' && !form.fixedLaunchDirectoryName.trim()) {
+      setMessage('固定目录模式必须填写固定目录名')
       return
     }
 
@@ -1318,6 +1564,84 @@ export default function Admin() {
                 />
               </div>
 
+              <div className="sm:col-span-2">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                  <div className="mb-4">
+                    <div className="text-sm font-semibold text-gray-900">启动与安装契约</div>
+                    <p className="mt-1 text-xs text-gray-500">网站名称只用于展示，安装目录和登录器入口由这些字段明确指定。</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">安装目录名 <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={form.installDirectoryName}
+                        onChange={e => setForm({ ...form, installDirectoryName: e.target.value })}
+                        placeholder="例如：wugengji-new"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">保存到 D:\\XxxyxGames\\{`{安装目录名}`}。</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">登录器入口相对路径 <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={form.launcherRelativePath}
+                        onChange={e => setForm({ ...form, launcherRelativePath: e.target.value })}
+                        placeholder="例如：Login\\Launcher.exe"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">启动模式 <span className="text-red-500">*</span></label>
+                      <select
+                        value={form.launchMode}
+                        onChange={e => setForm({ ...form, launchMode: e.target.value as GameForm['launchMode'], fixedLaunchDirectoryName: e.target.value === 'fixed-root-junction' ? form.fixedLaunchDirectoryName : '' })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
+                      >
+                        <option value="">未指定</option>
+                        <option value="portable">portable（跟随安装目录）</option>
+                        <option value="fixed-root-junction">fixed-root-junction（固定目录兼容）</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">固定目录名</label>
+                      <input
+                        type="text"
+                        value={form.fixedLaunchDirectoryName}
+                        disabled={form.launchMode !== 'fixed-root-junction'}
+                        onChange={e => setForm({ ...form, fixedLaunchDirectoryName: e.target.value })}
+                        placeholder="仅固定目录模式填写"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base disabled:bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">登录器清单 HTTPS 地址</label>
+                      <input
+                        type="url"
+                        value={form.launcherManifestUrl}
+                        onChange={e => setForm({ ...form, launcherManifestUrl: e.target.value })}
+                        placeholder="https://api.567zm.com/api/games/25/launcher-manifest"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">登录器更新策略</label>
+                      <select
+                        value={form.launcherUpdatePolicy}
+                        onChange={e => setForm({ ...form, launcherUpdatePolicy: e.target.value as GameForm['launcherUpdatePolicy'] })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-base"
+                      >
+                        <option value="">未指定</option>
+                        <option value="notify">notify（提示更新）</option>
+                        <option value="automatic">automatic（自动更新）</option>
+                        <option value="required">required（必须更新）</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Cover Image */}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1460,6 +1784,226 @@ export default function Admin() {
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
                 />
               </div>
+
+              {editingGame && (
+                <div className="sm:col-span-2">
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">登录器版本发布</div>
+                        <p className="mt-1 text-xs text-gray-500">版本清单只发布 HTTPS 安装包，并在客户端启动前校验大小和 SHA-256。</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setLauncherReleaseForm(createEmptyLauncherReleaseForm()); setLauncherReleaseMessage('') }}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700"
+                      >
+                        新建版本
+                      </button>
+                    </div>
+
+                    {launcherReleaseMessage && (
+                      <div className={`mb-4 rounded-lg p-3 text-sm ${launcherReleaseMessage.includes('成功') || launcherReleaseMessage.includes('已保存') || launcherReleaseMessage.includes('已发布') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {launcherReleaseMessage}
+                      </div>
+                    )}
+
+                    <div className="mb-5 rounded-xl bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="text-sm font-medium text-gray-900">
+                          {launcherReleaseForm.id ? `编辑版本 ${launcherReleaseForm.version}` : '版本信息'}
+                        </div>
+                        {launcherReleaseForm.id && (
+                          <button
+                            type="button"
+                            onClick={() => setLauncherReleaseForm(createEmptyLauncherReleaseForm())}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            取消编辑
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">版本号</label>
+                          <input
+                            value={launcherReleaseForm.version}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, version: e.target.value })}
+                            placeholder="例如：1.0.1"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">安装包格式</label>
+                          <select
+                            value={launcherReleaseForm.packageFormat}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, packageFormat: e.target.value as 'zip' | 'exe', launcherSha256: '' })}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="zip">ZIP（支持多个文件）</option>
+                            <option value="exe">EXE（只替换入口）</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-2 block text-sm font-medium text-gray-700">安装包</label>
+                          <UppyUploader
+                            type="game"
+                            value={{ url: launcherReleaseForm.packageUrl }}
+                            onChange={handleLauncherPackageUpload}
+                          />
+                          <input
+                            value={launcherReleaseForm.packageUrl}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, packageUrl: e.target.value, size: '', sha256: '', launcherSha256: '' })}
+                            placeholder="也可以直接填写 HTTPS 安装包地址"
+                            className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">安装包大小（字节）</label>
+                          <input
+                            type="number"
+                            min="1"
+                            readOnly
+                            value={launcherReleaseForm.size}
+                            placeholder="上传后自动填入"
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">SHA-256</label>
+                          <input
+                            readOnly
+                            value={launcherReleaseForm.sha256}
+                            placeholder="64 位十六进制字符串"
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-base font-mono focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">入口 EXE SHA-256</label>
+                          <input
+                            readOnly
+                            value={launcherReleaseForm.launcherSha256}
+                            placeholder="ZIP 必填；EXE 可与包哈希相同"
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-base font-mono focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">登录器入口相对路径</label>
+                          <input
+                            value={launcherReleaseForm.launcherRelativePath}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, launcherRelativePath: e.target.value, launcherSha256: '' })}
+                            placeholder="例如：Login\\Launcher.exe"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">启动模式</label>
+                          <select
+                            value={launcherReleaseForm.launchMode}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, launchMode: e.target.value as LauncherReleaseForm['launchMode'], fixedLaunchDirectoryName: e.target.value === 'fixed-root-junction' ? launcherReleaseForm.fixedLaunchDirectoryName : '' })}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="">沿用游戏设置</option>
+                            <option value="portable">portable</option>
+                            <option value="fixed-root-junction">fixed-root-junction</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">固定目录名</label>
+                          <input
+                            value={launcherReleaseForm.fixedLaunchDirectoryName}
+                            disabled={launcherReleaseForm.launchMode !== 'fixed-root-junction'}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, fixedLaunchDirectoryName: e.target.value })}
+                            placeholder="固定目录模式填写"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">最低盒子版本</label>
+                          <input
+                            value={launcherReleaseForm.minBoxVersion}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, minBoxVersion: e.target.value })}
+                            placeholder="可选，例如：1.2.9"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="flex items-end gap-5 pb-2">
+                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input type="checkbox" checked={launcherReleaseForm.mandatory} onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, mandatory: e.target.checked })} />
+                            强制更新
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input type="checkbox" checked={launcherReleaseForm.published} onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, published: e.target.checked })} />
+                            立即发布
+                          </label>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-2 block text-sm font-medium text-gray-700">保留文件路径（每行一个）</label>
+                          <textarea
+                            rows={2}
+                            value={launcherReleaseForm.preservePaths}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, preservePaths: e.target.value })}
+                            placeholder="例如：config\\login.dat"
+                            className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 p-3">
+                          <span className="text-xs text-emerald-800">安装包已经上传后，服务器可以按入口路径读取包并计算两个 SHA-256。</span>
+                          <button
+                            type="button"
+                            onClick={() => void inspectLauncherPackage()}
+                            disabled={launcherReleaseLoading}
+                            className="shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                          >
+                            计算校验值
+                          </button>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-2 block text-sm font-medium text-gray-700">发布说明</label>
+                          <textarea
+                            rows={2}
+                            value={launcherReleaseForm.notes}
+                            onChange={e => setLauncherReleaseForm({ ...launcherReleaseForm, notes: e.target.value })}
+                            placeholder="可选，显示给运维人员"
+                            className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveLauncherRelease()}
+                            disabled={launcherReleaseLoading}
+                            className="rounded-xl bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {launcherReleaseLoading ? '保存中...' : launcherReleaseForm.id ? '保存版本' : '创建版本'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {launcherReleaseLoading && launcherReleases.length === 0 && <p className="text-sm text-gray-500">正在读取版本...</p>}
+                      {!launcherReleaseLoading && launcherReleases.length === 0 && <p className="text-sm text-gray-500">暂无登录器版本，请先创建版本。</p>}
+                      {launcherReleases.map(release => (
+                        <div key={release.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-900">
+                              <span>v{release.version}</span>
+                              <span className={release.published ? 'rounded bg-green-100 px-2 py-0.5 text-xs text-green-700' : 'rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600'}>{release.published ? '已发布' : '草稿'}</span>
+                              {release.mandatory && <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">强制</span>}
+                            </div>
+                            <div className="mt-1 truncate text-xs text-gray-500">{release.packageUrl} · {release.size.toLocaleString()} bytes</div>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button type="button" onClick={() => setLauncherReleaseForm(launcherReleaseToForm(release))} className="rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-700 hover:bg-gray-200">编辑</button>
+                            <button type="button" onClick={() => handleDeleteLauncherRelease(release)} className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 hover:bg-red-100">删除</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Preview */}

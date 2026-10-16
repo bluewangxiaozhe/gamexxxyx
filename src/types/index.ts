@@ -44,6 +44,37 @@ export interface Game {
   status?: 'active' | 'inactive' | 'maintenance'
   tags?: string[]
   screenshots?: string[]
+  installDirectoryName?: string
+  launcherRelativePath?: string
+  launchMode?: 'portable' | 'fixed-root-junction' | ''
+  fixedLaunchDirectoryName?: string
+  launcherManifestUrl?: string
+  launcherUpdatePolicy?: 'notify' | 'automatic' | 'required' | ''
+}
+
+export interface LauncherRelease {
+  id: number
+  gameId: number
+  version: string
+  packageUrl: string
+  packageFormat: 'zip' | 'exe'
+  size: number
+  sha256: string
+  launcherSha256: string
+  signature?: string
+  signatureAlgorithm?: string
+  keyId?: string
+  launcherRelativePath?: string
+  launchMode?: 'portable' | 'fixed-root-junction' | ''
+  fixedLaunchDirectoryName?: string
+  mandatory: boolean
+  minBoxVersion?: string
+  preservePaths: string[]
+  notes?: string
+  published: boolean
+  publishedAt?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface ApiResponse<T> {

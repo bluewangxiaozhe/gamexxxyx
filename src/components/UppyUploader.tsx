@@ -7,6 +7,8 @@ interface FileData {
   url: string
   filename?: string
   size?: number
+  sha256?: string
+  launcherSha256?: string
 }
 
 interface UppyUploaderProps {
@@ -83,8 +85,8 @@ export default function UppyUploader({ value, onChange, type }: UppyUploaderProp
       })
 
       if (response.data.success && response.data.data) {
-        const { url, filename, size } = response.data.data
-        const newFileData: FileData = { url, filename, size }
+        const { url, filename, size, sha256, launcherSha256 } = response.data.data
+        const newFileData: FileData = { url, filename, size, sha256, launcherSha256 }
         onChange(newFileData)
         setFileData(newFileData)
         setError(null)
