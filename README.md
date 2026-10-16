@@ -65,7 +65,7 @@ public/
 
 ## 服务端部署
 
-后端 API（`server.js` + `api-package.json`）单独部署到服务器，所需环境变量见
+后端 API（`server.js` + API 专用 `package.json`/`package-lock.json`）单独部署到服务器，`api-package.json` 只作为依赖参考清单，所需环境变量见
 `server.env.example`。生产当前通过 `systemd` 服务 `gamexxxyx-api.service` 运行，`WorkingDirectory`
 为 `/opt/gamexxxyx-api`，`ExecStart=/usr/bin/node /opt/gamexxxyx-api/server.js`。关键变量：
 
@@ -75,6 +75,11 @@ public/
 
 更完整的生产环境、上线、回滚与服务信息见：
 - `[docs/deployment/api-server-production-2026-07-06.md](./docs/deployment/api-server-production-2026-07-06.md)`
+
+### 客户端热更新
+
+- `GET /api/client-update` 读取 `CLIENT_UPDATE_MANIFEST_PATH` 指定的文件，未配置时读取服务工作目录的 `client-update.json`；仅返回通过版本号、HTTPS 地址和 SHA-256 校验的清单，清单不可用时返回 `503`，客户端不会下载安装包。
+- 安装包由 `down.567zm.com` 分发，API 只分发小型清单。发布新客户端时，先上传并验证带版本号的安装包，再更新 `client-update.json`。API 每次请求读取清单，替换清单无需重启服务。
 
 ### 2026-07-06 Banner 共享数据源进展
 

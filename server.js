@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import multer from 'multer';
+import yauzl from 'yauzl';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
@@ -14,6 +16,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DB_PATH = process.env.DB_PATH || '/var/lib/gamexxxyx-api/app.db';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const PUBLIC_API_BASE = (process.env.PUBLIC_API_BASE || 'https://api.567zm.com/api').replace(/\/$/, '');
+const CLIENT_UPDATE_MANIFEST_PATH = process.env.CLIENT_UPDATE_MANIFEST_PATH ||
+  path.join(process.cwd(), 'client-update.json');
 
 if (!ADMIN_TOKEN) {
   console.warn('[警告] 未设置 ADMIN_TOKEN，所有写接口（增删改/上传）将返回 503。请在服务端环境变量中配置。');
@@ -47,10 +52,54 @@ db.exec(`
     status TEXT DEFAULT 'active',
     tags TEXT DEFAULT '[]',
     screenshots TEXT DEFAULT '[]',
+    installDirectoryName TEXT DEFAULT '',
+    launcherRelativePath TEXT DEFAULT '',
+    launchMode TEXT DEFAULT '',
+    fixedLaunchDirectoryName TEXT DEFAULT '',
+    launcherManifestUrl TEXT DEFAULT '',
+    launcherUpdatePolicy TEXT DEFAULT '',
     createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
     updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_launcher_releases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gameId INTEGER NOT NULL,
+    version TEXT NOT NULL,
+    packageUrl TEXT NOT NULL,
+    packageFormat TEXT DEFAULT 'zip',
+    size INTEGER DEFAULT 0,
+    sha256 TEXT NOT NULL,
+    launcherSha256 TEXT DEFAULT '',
+    signature TEXT DEFAULT '',
+    signatureAlgorithm TEXT DEFAULT '',
+    keyId TEXT DEFAULT '',
+    launcherRelativePath TEXT DEFAULT '',
+    launchMode TEXT DEFAULT '',
+    fixedLaunchDirectoryName TEXT DEFAULT '',
+    mandatory INTEGER DEFAULT 0,
+    minBoxVersion TEXT DEFAULT '',
+    preservePaths TEXT DEFAULT '[]',
+    notes TEXT DEFAULT '',
+    published INTEGER DEFAULT 1,
+    publishedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+const launcherReleaseColumns = db.prepare('PRAGMA table_info(game_launcher_releases)').all().map(column => column.name);
+if (!launcherReleaseColumns.includes('signatureAlgorithm')) {
+  db.prepare("ALTER TABLE game_launcher_releases ADD COLUMN signatureAlgorithm TEXT DEFAULT ''").run();
+}
+if (!launcherReleaseColumns.includes('keyId')) {
+  db.prepare("ALTER TABLE game_launcher_releases ADD COLUMN keyId TEXT DEFAULT ''").run();
+}
+if (!launcherReleaseColumns.includes('launcherSha256')) {
+  db.prepare("ALTER TABLE game_launcher_releases ADD COLUMN launcherSha256 TEXT DEFAULT ''").run();
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS hero_banners (
@@ -93,6 +142,24 @@ if (!gameColumns.includes('heat')) {
 }
 if (!gameColumns.includes('banner')) {
   db.prepare("ALTER TABLE games ADD COLUMN banner TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('installDirectoryName')) {
+  db.prepare("ALTER TABLE games ADD COLUMN installDirectoryName TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('launcherRelativePath')) {
+  db.prepare("ALTER TABLE games ADD COLUMN launcherRelativePath TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('launchMode')) {
+  db.prepare("ALTER TABLE games ADD COLUMN launchMode TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('fixedLaunchDirectoryName')) {
+  db.prepare("ALTER TABLE games ADD COLUMN fixedLaunchDirectoryName TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('launcherManifestUrl')) {
+  db.prepare("ALTER TABLE games ADD COLUMN launcherManifestUrl TEXT DEFAULT ''").run();
+}
+if (!gameColumns.includes('launcherUpdatePolicy')) {
+  db.prepare("ALTER TABLE games ADD COLUMN launcherUpdatePolicy TEXT DEFAULT ''").run();
 }
 
 app.use(cors({
@@ -238,6 +305,132 @@ function normalizeAnnouncementInput(input, fallback = {}) {
   };
 }
 
+const LAUNCH_MODES = new Set(['portable', 'fixed-root-junction']);
+const LAUNCHER_UPDATE_POLICIES = new Set(['notify', 'automatic', 'required']);
+const LAUNCHER_PACKAGE_FORMATS = new Set(['zip', 'exe']);
+const WINDOWS_RESERVED_DIRECTORY_NAMES = new Set([
+  'CON', 'PRN', 'AUX', 'NUL',
+  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+]);
+
+function normalizeOptionalString(value) {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+function validateDirectoryName(value, fieldName) {
+  const directoryName = normalizeOptionalString(value);
+  if (!directoryName) return '';
+  if (directoryName === '.' || directoryName === '..') {
+    return `${fieldName} 不能使用 . 或 ..`;
+  }
+  if (directoryName.length > 128 || /[\\/:*?"<>|\u0000-\u001F]/.test(directoryName)) {
+    return `${fieldName} 必须是单层 Windows 目录名`;
+  }
+  if (directoryName.endsWith('.') || directoryName.endsWith(' ')) {
+    return `${fieldName} 不能以空格或句点结尾`;
+  }
+  const baseName = directoryName.split('.')[0].toUpperCase();
+  if (WINDOWS_RESERVED_DIRECTORY_NAMES.has(baseName)) {
+    return `${fieldName} 不能使用 Windows 保留名称`;
+  }
+  return '';
+}
+
+function validateRelativePath(value, fieldName) {
+  const relativePath = normalizeOptionalString(value);
+  if (!relativePath) return '';
+  if (relativePath.length > 260 || /^[\\/]/.test(relativePath) || /^[A-Za-z]:/.test(relativePath)) {
+    return `${fieldName} 必须是相对路径`;
+  }
+  if (/[\u0000-\u001F]/.test(relativePath)) {
+    return `${fieldName} 包含非法字符`;
+  }
+  const segments = relativePath.split(/[\\/]+/);
+  if (segments.some(segment => !segment || segment === '.' || segment === '..')) {
+    return `${fieldName} 不能包含空路径段或路径穿越`;
+  }
+  return '';
+}
+
+function validateHttpsUrl(value, fieldName) {
+  const url = normalizeOptionalString(value);
+  if (!url) return '';
+  try {
+    if (new URL(url).protocol !== 'https:') throw new Error('protocol');
+  } catch {
+    return `${fieldName} 必须是 HTTPS URL`;
+  }
+  return '';
+}
+
+function normalizeGameContract(input, fallback = {}) {
+  const game = { ...fallback, ...(input || {}) };
+  return {
+    installDirectoryName: normalizeOptionalString(game.installDirectoryName),
+    launcherRelativePath: normalizeOptionalString(game.launcherRelativePath),
+    launchMode: normalizeOptionalString(game.launchMode),
+    fixedLaunchDirectoryName: normalizeOptionalString(game.fixedLaunchDirectoryName),
+    launcherManifestUrl: normalizeOptionalString(game.launcherManifestUrl),
+    launcherUpdatePolicy: normalizeOptionalString(game.launcherUpdatePolicy),
+  };
+}
+
+function validateGameContract(contract, existingId = null, requireNewContract = false) {
+  if (requireNewContract && !contract.installDirectoryName) {
+    return '新游戏必须填写 installDirectoryName';
+  }
+  if (requireNewContract && !contract.launcherRelativePath) {
+    return '新游戏必须填写 launcherRelativePath';
+  }
+  if (requireNewContract && !contract.launchMode) {
+    return '新游戏必须填写 launchMode';
+  }
+  const directoryError = validateDirectoryName(contract.installDirectoryName, 'installDirectoryName');
+  if (directoryError) return directoryError;
+
+  const fixedDirectoryError = validateDirectoryName(
+    contract.fixedLaunchDirectoryName,
+    'fixedLaunchDirectoryName',
+  );
+  if (fixedDirectoryError) return fixedDirectoryError;
+
+  const launcherPathError = validateRelativePath(contract.launcherRelativePath, 'launcherRelativePath');
+  if (launcherPathError) return launcherPathError;
+
+  if (contract.launchMode && !LAUNCH_MODES.has(contract.launchMode)) {
+    return 'launchMode 只能是 portable 或 fixed-root-junction';
+  }
+  if (contract.launchMode === 'fixed-root-junction' && !contract.fixedLaunchDirectoryName) {
+    return 'launchMode 为 fixed-root-junction 时必须填写 fixedLaunchDirectoryName';
+  }
+  if (contract.launchMode !== 'fixed-root-junction' && contract.fixedLaunchDirectoryName) {
+    return '只有 fixed-root-junction 模式可以填写 fixedLaunchDirectoryName';
+  }
+
+  const manifestUrlError = validateHttpsUrl(contract.launcherManifestUrl, 'launcherManifestUrl');
+  if (manifestUrlError) return manifestUrlError;
+  if (contract.launcherUpdatePolicy && !LAUNCHER_UPDATE_POLICIES.has(contract.launcherUpdatePolicy)) {
+    return 'launcherUpdatePolicy 只能是 notify、automatic 或 required';
+  }
+  if (contract.launcherUpdatePolicy && !contract.launcherManifestUrl && !requireNewContract) {
+    return '填写 launcherUpdatePolicy 时必须同时填写 launcherManifestUrl';
+  }
+
+  if (contract.installDirectoryName) {
+    const duplicate = db.prepare(`
+      SELECT id FROM games
+      WHERE LOWER(installDirectoryName) = LOWER(?)
+        AND installDirectoryName != ''
+        AND (? IS NULL OR id != ?)
+      LIMIT 1
+    `).get(contract.installDirectoryName, existingId, existingId);
+    if (duplicate) return 'installDirectoryName 已被其他游戏使用';
+  }
+
+  return '';
+}
+
 const heroBannerColumns = db.prepare('PRAGMA table_info(hero_banners)').all().map(column => column.name);
 if (!heroBannerColumns.includes('category')) {
   db.prepare("ALTER TABLE hero_banners ADD COLUMN category TEXT DEFAULT '推荐'").run();
@@ -254,6 +447,7 @@ function serializeGame(row) {
 
 function normalizeGameInput(input, fallback = {}) {
   const game = { ...fallback, ...(input || {}) };
+  const contract = normalizeGameContract(input, fallback);
   return {
     name: String(game.name || '').trim(),
     description: game.description || '',
@@ -272,7 +466,105 @@ function normalizeGameInput(input, fallback = {}) {
     status: game.status || 'active',
     tags: normalizeJsonArray(game.tags),
     screenshots: normalizeJsonArray(game.screenshots),
+    ...contract,
   };
+}
+
+function serializeLauncherRelease(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    size: Number(row.size || 0),
+    mandatory: Number(row.mandatory || 0) !== 0,
+    published: Number(row.published || 0) !== 0,
+    preservePaths: parseJsonArray(row.preservePaths),
+  };
+}
+
+function normalizeLauncherReleaseInput(input, fallback = {}) {
+  const release = { ...fallback, ...(input || {}) };
+  const parsedSize = Number(release.size);
+  return {
+    version: normalizeOptionalString(release.version),
+    packageUrl: normalizeOptionalString(release.packageUrl),
+    packageFormat: normalizeOptionalString(release.packageFormat || 'zip').toLowerCase(),
+    size: Number.isFinite(parsedSize) && parsedSize >= 0 ? Math.floor(parsedSize) : 0,
+    sha256: normalizeOptionalString(release.sha256).toLowerCase(),
+    launcherSha256: normalizeOptionalString(release.launcherSha256).toLowerCase(),
+    signature: normalizeOptionalString(release.signature),
+    signatureAlgorithm: normalizeOptionalString(release.signatureAlgorithm),
+    keyId: normalizeOptionalString(release.keyId),
+    launcherRelativePath: normalizeOptionalString(release.launcherRelativePath),
+    launchMode: normalizeOptionalString(release.launchMode),
+    fixedLaunchDirectoryName: normalizeOptionalString(release.fixedLaunchDirectoryName),
+    mandatory: normalizeBoolean(release.mandatory, false) ? 1 : 0,
+    minBoxVersion: normalizeOptionalString(release.minBoxVersion),
+    preservePaths: normalizeJsonArray(release.preservePaths),
+    notes: normalizeOptionalString(release.notes),
+    published: normalizeBoolean(release.published, true) ? 1 : 0,
+  };
+}
+
+function validatePreservePaths(value) {
+  const paths = parseJsonArray(value);
+  if (paths.some(item => typeof item !== 'string' || validateRelativePath(item, 'preservePaths'))) {
+    return 'preservePaths 必须是安全的相对路径数组';
+  }
+  return '';
+}
+
+function validateLauncherRelease(release, gameId, existingId = null) {
+  if (!/^\d+\.\d+\.\d+$/.test(release.version)) {
+    return 'version 必须是三段数字版本号';
+  }
+  const packageUrlError = validateHttpsUrl(release.packageUrl, 'packageUrl');
+  if (packageUrlError) return packageUrlError;
+  if (!LAUNCHER_PACKAGE_FORMATS.has(release.packageFormat)) {
+    return 'packageFormat 只能是 zip 或 exe';
+  }
+  if (!Number.isInteger(release.size) || release.size <= 0) {
+    return 'size 必须是正整数';
+  }
+  if (!/^[a-f0-9]{64}$/.test(release.sha256)) {
+    return 'sha256 必须是 64 位十六进制字符串';
+  }
+  if (!/^[a-f0-9]{64}$/.test(release.launcherSha256)) {
+    return 'launcherSha256 必须是登录器入口文件的 64 位 SHA-256';
+  }
+  const launcherPathError = validateRelativePath(release.launcherRelativePath, 'launcherRelativePath');
+  if (launcherPathError) return launcherPathError;
+  const directoryError = validateDirectoryName(
+    release.fixedLaunchDirectoryName,
+    'fixedLaunchDirectoryName',
+  );
+  if (directoryError) return directoryError;
+  if (release.launchMode && !LAUNCH_MODES.has(release.launchMode)) {
+    return 'launchMode 只能是 portable 或 fixed-root-junction';
+  }
+  if (release.launchMode === 'fixed-root-junction' && !release.fixedLaunchDirectoryName) {
+    return 'launchMode 为 fixed-root-junction 时必须填写 fixedLaunchDirectoryName';
+  }
+  if (release.launchMode !== 'fixed-root-junction' && release.fixedLaunchDirectoryName) {
+    return '只有 fixed-root-junction 模式可以填写 fixedLaunchDirectoryName';
+  }
+  const preservePathsError = validatePreservePaths(release.preservePaths);
+  if (preservePathsError) return preservePathsError;
+
+  const duplicate = db.prepare(`
+    SELECT id FROM game_launcher_releases
+    WHERE gameId = ? AND version = ? AND (? IS NULL OR id != ?)
+    LIMIT 1
+  `).get(gameId, release.version, existingId, existingId);
+  if (duplicate) return '同一个游戏已经存在该登录器版本';
+  return '';
+}
+
+function getGameById(gameId) {
+  return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+}
+
+function getLauncherReleaseById(releaseId) {
+  return db.prepare('SELECT * FROM game_launcher_releases WHERE id = ?').get(releaseId);
 }
 
 function timingSafeEqual(a, b) {
@@ -304,6 +596,40 @@ function requireAuth(req, res, next) {
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', db: 'sqlite' });
+});
+
+app.get('/api/client-update', (req, res) => {
+  try {
+    // Windows 工具生成的 UTF-8 文件可能带 BOM；JSON.parse 不会自动忽略它。
+    const manifestText = fs.readFileSync(CLIENT_UPDATE_MANIFEST_PATH, 'utf8')
+      .replace(/^\uFEFF/, '');
+    const manifest = JSON.parse(manifestText);
+    const validVersion = /^\d+\.\d+\.\d+$/.test(String(manifest.version || ''));
+    const validUrl = typeof manifest.url === 'string' && manifest.url.startsWith('https://');
+    const validHash = /^[a-fA-F0-9]{64}$/.test(String(manifest.sha256 || ''));
+
+    if (!validVersion || !validUrl || !validHash) {
+      throw new Error('更新清单缺少 version、HTTPS url 或 SHA-256');
+    }
+
+    if (manifest.fallbackUrl &&
+        (typeof manifest.fallbackUrl !== 'string' || !manifest.fallbackUrl.startsWith('https://'))) {
+      throw new Error('更新清单的 fallbackUrl 必须使用 HTTPS');
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      version: manifest.version,
+      url: manifest.url,
+      fallbackUrl: manifest.fallbackUrl || '',
+      sha256: manifest.sha256,
+      notes: String(manifest.notes || ''),
+      mandatory: Boolean(manifest.mandatory),
+    });
+  } catch (error) {
+    console.error('[client-update] 更新清单不可用:', error.message);
+    res.status(503).json({ success: false, message: '更新服务暂未就绪' });
+  }
 });
 
 // 供后台登录校验密码用
@@ -400,19 +726,33 @@ app.post('/api/games', requireAuth, (req, res) => {
     res.status(400).json({ success: false, message: 'name is required' });
     return;
   }
+  const contractError = validateGameContract(game, null, true);
+  if (contractError) {
+    res.status(400).json({ success: false, message: contractError });
+    return;
+  }
 
   const result = db.prepare(`
     INSERT INTO games (
       name, description, category, version, size,
       downloadUrl, guideUrl, dropRateUrl, imageUrl, openTime, heat, banner, rating, downloads,
-      status, tags, screenshots
+      status, tags, screenshots, installDirectoryName, launcherRelativePath,
+      launchMode, fixedLaunchDirectoryName, launcherManifestUrl, launcherUpdatePolicy
     ) VALUES (
       @name, @description, @category, @version, @size,
       @downloadUrl, @guideUrl, @dropRateUrl, @imageUrl, @openTime, @heat, @banner, @rating, @downloads,
-      @status, @tags, @screenshots
+      @status, @tags, @screenshots, @installDirectoryName, @launcherRelativePath,
+      @launchMode, @fixedLaunchDirectoryName, @launcherManifestUrl, @launcherUpdatePolicy
     )
   `).run(game);
 
+  if (!game.launcherManifestUrl) {
+    db.prepare(`
+      UPDATE games
+      SET launcherManifestUrl = ?
+      WHERE id = ?
+    `).run(`${PUBLIC_API_BASE}/games/${result.lastInsertRowid}/launcher-manifest`, result.lastInsertRowid);
+  }
   const created = db.prepare('SELECT * FROM games WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(serializeGame(created));
 });
@@ -425,6 +765,11 @@ app.put('/api/games/:id', requireAuth, (req, res) => {
   }
 
   const game = normalizeGameInput(req.body, serializeGame(existing));
+  const contractError = validateGameContract(game, Number(req.params.id));
+  if (contractError) {
+    res.status(400).json({ success: false, message: contractError });
+    return;
+  }
   db.prepare(`
     UPDATE games SET
       name = @name,
@@ -444,6 +789,12 @@ app.put('/api/games/:id', requireAuth, (req, res) => {
       status = @status,
       tags = @tags,
       screenshots = @screenshots,
+      installDirectoryName = @installDirectoryName,
+      launcherRelativePath = @launcherRelativePath,
+      launchMode = @launchMode,
+      fixedLaunchDirectoryName = @fixedLaunchDirectoryName,
+      launcherManifestUrl = @launcherManifestUrl,
+      launcherUpdatePolicy = @launcherUpdatePolicy,
       updatedAt = CURRENT_TIMESTAMP
     WHERE id = @id
   `).run({ id: req.params.id, ...game });
@@ -454,6 +805,150 @@ app.put('/api/games/:id', requireAuth, (req, res) => {
 
 app.delete('/api/games/:id', requireAuth, (req, res) => {
   const result = db.prepare('DELETE FROM games WHERE id = ?').run(req.params.id);
+  res.json({ success: result.changes > 0 });
+});
+
+function serializePublicLauncherManifest(game, release) {
+  const gameContract = normalizeGameContract(game, game);
+  const releaseData = serializeLauncherRelease(release);
+  return {
+    schemaVersion: 1,
+    gameId: Number(game.id),
+    gameName: game.name,
+    installDirectoryName: gameContract.installDirectoryName,
+    launcherManifestUrl: gameContract.launcherManifestUrl,
+    launcherUpdatePolicy: gameContract.launcherUpdatePolicy,
+    version: releaseData.version,
+    packageUrl: releaseData.packageUrl,
+    packageFormat: releaseData.packageFormat,
+    size: releaseData.size,
+    sha256: releaseData.sha256,
+    launcherSha256: releaseData.launcherSha256,
+    signature: releaseData.signature,
+    signatureAlgorithm: releaseData.signatureAlgorithm,
+    keyId: releaseData.keyId,
+    launcherRelativePath: releaseData.launcherRelativePath || gameContract.launcherRelativePath,
+    launchMode: releaseData.launchMode || gameContract.launchMode,
+    fixedLaunchDirectoryName: releaseData.fixedLaunchDirectoryName || gameContract.fixedLaunchDirectoryName,
+    mandatory: releaseData.mandatory,
+    minBoxVersion: releaseData.minBoxVersion,
+    preservePaths: releaseData.preservePaths,
+    notes: releaseData.notes,
+    publishedAt: releaseData.publishedAt,
+  };
+}
+
+app.get('/api/games/:id/launcher-manifest', (req, res) => {
+  const game = getGameById(req.params.id);
+  if (!game || game.status === 'inactive') {
+    res.status(404).json({ success: false, message: 'Game not found' });
+    return;
+  }
+
+  const release = db.prepare(`
+    SELECT * FROM game_launcher_releases
+    WHERE gameId = ? AND published = 1
+    ORDER BY datetime(publishedAt) DESC, id DESC
+    LIMIT 1
+  `).get(req.params.id);
+  if (!release) {
+    res.status(404).json({ success: false, message: 'Launcher manifest not found' });
+    return;
+  }
+
+  res.set('Cache-Control', 'public, max-age=60');
+  res.json(serializePublicLauncherManifest(game, release));
+});
+
+app.get('/api/games/:id/launcher-releases', requireAuth, (req, res) => {
+  const game = getGameById(req.params.id);
+  if (!game) {
+    res.status(404).json({ success: false, message: 'Game not found' });
+    return;
+  }
+  const rows = db.prepare(`
+    SELECT * FROM game_launcher_releases
+    WHERE gameId = ?
+    ORDER BY datetime(publishedAt) DESC, id DESC
+  `).all(req.params.id);
+  res.json(rows.map(serializeLauncherRelease));
+});
+
+app.post('/api/games/:id/launcher-releases', requireAuth, (req, res) => {
+  const game = getGameById(req.params.id);
+  if (!game) {
+    res.status(404).json({ success: false, message: 'Game not found' });
+    return;
+  }
+
+  const release = normalizeLauncherReleaseInput(req.body);
+  const validationError = validateLauncherRelease(release, Number(req.params.id));
+  if (validationError) {
+    res.status(400).json({ success: false, message: validationError });
+    return;
+  }
+
+  const result = db.prepare(`
+    INSERT INTO game_launcher_releases (
+      gameId, version, packageUrl, packageFormat, size, sha256, launcherSha256, signature,
+      signatureAlgorithm, keyId,
+      launcherRelativePath, launchMode, fixedLaunchDirectoryName, mandatory,
+      minBoxVersion, preservePaths, notes, published
+    ) VALUES (
+      @gameId, @version, @packageUrl, @packageFormat, @size, @sha256, @launcherSha256, @signature,
+      @signatureAlgorithm, @keyId,
+      @launcherRelativePath, @launchMode, @fixedLaunchDirectoryName, @mandatory,
+      @minBoxVersion, @preservePaths, @notes, @published
+    )
+  `).run({ gameId: Number(req.params.id), ...release });
+
+  const created = getLauncherReleaseById(result.lastInsertRowid);
+  res.status(201).json(serializeLauncherRelease(created));
+});
+
+app.put('/api/launcher-releases/:id', requireAuth, (req, res) => {
+  const existing = getLauncherReleaseById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Launcher release not found' });
+    return;
+  }
+
+  const release = normalizeLauncherReleaseInput(req.body, serializeLauncherRelease(existing));
+  const validationError = validateLauncherRelease(release, Number(existing.gameId), Number(req.params.id));
+  if (validationError) {
+    res.status(400).json({ success: false, message: validationError });
+    return;
+  }
+
+  db.prepare(`
+    UPDATE game_launcher_releases SET
+      version = @version,
+      packageUrl = @packageUrl,
+      packageFormat = @packageFormat,
+      size = @size,
+      sha256 = @sha256,
+      launcherSha256 = @launcherSha256,
+      signature = @signature,
+      signatureAlgorithm = @signatureAlgorithm,
+      keyId = @keyId,
+      launcherRelativePath = @launcherRelativePath,
+      launchMode = @launchMode,
+      fixedLaunchDirectoryName = @fixedLaunchDirectoryName,
+      mandatory = @mandatory,
+      minBoxVersion = @minBoxVersion,
+      preservePaths = @preservePaths,
+      notes = @notes,
+      published = @published,
+      publishedAt = CASE WHEN @published = 1 THEN CURRENT_TIMESTAMP ELSE publishedAt END,
+      updatedAt = CURRENT_TIMESTAMP
+    WHERE id = @id
+  `).run({ id: Number(req.params.id), ...release });
+
+  res.json(serializeLauncherRelease(getLauncherReleaseById(req.params.id)));
+});
+
+app.delete('/api/launcher-releases/:id', requireAuth, (req, res) => {
+  const result = db.prepare('DELETE FROM game_launcher_releases WHERE id = ?').run(req.params.id);
   res.json({ success: result.changes > 0 });
 });
 
@@ -693,8 +1188,80 @@ async function uploadToR2(file, folder) {
     url: buildPublicUrl(key),
     filename,
     size: file.size,
+    sha256: crypto.createHash('sha256').update(file.buffer).digest('hex'),
     path: key,
   };
+}
+
+function normalizePackageEntryPath(value) {
+  const normalized = normalizeOptionalString(value).replace(/\\/g, '/');
+  if (!normalized || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
+    throw new Error('launcherRelativePath 必须是安装包内的相对路径');
+  }
+  const segments = normalized.split('/');
+  if (segments.some(segment => !segment || segment === '.' || segment === '..')) {
+    throw new Error('launcherRelativePath 包含非法目录跳转');
+  }
+  return segments.join('/');
+}
+
+async function hashZipEntry(buffer, relativePath) {
+  const target = normalizePackageEntryPath(relativePath).toLowerCase();
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true, decodeStrings: true }, (openError, zipFile) => {
+      if (openError) {
+        reject(openError);
+        return;
+      }
+
+      let found = false;
+      zipFile.readEntry();
+      zipFile.on('entry', entry => {
+        const entryPath = String(entry.fileName || '').replace(/\\/g, '/').replace(/\/$/, '');
+        if (entryPath.toLowerCase() !== target) {
+          zipFile.readEntry();
+          return;
+        }
+        found = true;
+        zipFile.openReadStream(entry, (streamError, stream) => {
+          if (streamError) {
+            zipFile.close();
+            reject(streamError);
+            return;
+          }
+          const hash = crypto.createHash('sha256');
+          stream.on('data', chunk => hash.update(chunk));
+          stream.on('error', error => {
+            zipFile.close();
+            reject(error);
+          });
+          stream.on('end', () => {
+            zipFile.close();
+            resolve(hash.digest('hex'));
+          });
+        });
+      });
+      zipFile.on('end', () => {
+        if (!found) reject(new Error('压缩包中没有找到指定的登录器入口文件'));
+      });
+      zipFile.on('error', reject);
+    });
+  });
+}
+
+async function inspectLauncherPackage(packageUrl, packageFormat, launcherRelativePath) {
+  const urlError = validateHttpsUrl(packageUrl, 'packageUrl');
+  if (urlError) throw new Error(urlError);
+  const format = normalizeOptionalString(packageFormat).toLowerCase();
+  if (!LAUNCHER_PACKAGE_FORMATS.has(format)) throw new Error('packageFormat 只能是 zip 或 exe');
+  const response = await fetch(packageUrl, { redirect: 'follow' });
+  if (!response.ok) throw new Error(`读取登录器安装包失败：HTTP ${response.status}`);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const launcherSha256 = format === 'exe'
+    ? sha256
+    : await hashZipEntry(buffer, launcherRelativePath);
+  return { size: buffer.length, sha256, launcherSha256 };
 }
 
 async function createPresignedUploadUrl(filename, folder, contentType, expiresIn = 3600) {
@@ -745,6 +1312,16 @@ function registerUploadRoute(type) {
 registerUploadRoute('game');
 registerUploadRoute('cover');
 registerUploadRoute('screenshot');
+
+app.post('/api/launcher-package-inspect', requireAuth, async (req, res) => {
+  try {
+    const { packageUrl, packageFormat, launcherRelativePath } = req.body || {};
+    const result = await inspectLauncherPackage(packageUrl, packageFormat, launcherRelativePath);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message || '无法读取登录器安装包' });
+  }
+});
 
 app.post('/api/upload/presign', requireAuth, async (req, res) => {
   try {

@@ -1,4 +1,4 @@
-import type { Game, HeroBanner, Announcement, ApiResponse } from '@/types'
+import type { Game, HeroBanner, Announcement, LauncherRelease, ApiResponse } from '@/types'
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'https://api.567zm.com/api'
 
@@ -98,5 +98,13 @@ export const api = {
   createGame: (game: Omit<Game, 'id'>) => request<Game>('/games', { method: 'POST', body: JSON.stringify(game) }),
   updateGame: (id: number, game: Partial<Game>) => request<Game>(`/games/${id}`, { method: 'PUT', body: JSON.stringify(game) }),
   deleteGame: (id: number) => request<null>(`/games/${id}`, { method: 'DELETE' }),
+  getLauncherReleases: (gameId: number) => request<LauncherRelease[]>(`/games/${gameId}/launcher-releases`),
+  createLauncherRelease: (gameId: number, release: Omit<LauncherRelease, 'id' | 'gameId' | 'createdAt' | 'updatedAt' | 'publishedAt'>) =>
+    request<LauncherRelease>(`/games/${gameId}/launcher-releases`, { method: 'POST', body: JSON.stringify(release) }),
+  updateLauncherRelease: (id: number, release: Partial<LauncherRelease>) =>
+    request<LauncherRelease>(`/launcher-releases/${id}`, { method: 'PUT', body: JSON.stringify(release) }),
+  deleteLauncherRelease: (id: number) => request<null>(`/launcher-releases/${id}`, { method: 'DELETE' }),
+  inspectLauncherPackage: (input: { packageUrl: string; packageFormat: 'zip' | 'exe'; launcherRelativePath: string }) =>
+    request<{ size: number; sha256: string; launcherSha256: string }>('/launcher-package-inspect', { method: 'POST', body: JSON.stringify(input) }),
   getCategories: () => request<string[]>('/categories'),
 }
