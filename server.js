@@ -353,6 +353,24 @@ function validateRelativePath(value, fieldName) {
   return '';
 }
 
+function validateLauncherRelativePath(value) {
+  const pathError = validateRelativePath(value, 'launcherRelativePath');
+  if (pathError) return pathError;
+  const relativePath = normalizeOptionalString(value);
+  if (!relativePath) return '';
+  if (!/\.exe$/i.test(relativePath)) {
+    return 'launcherRelativePath 必须指向 .exe 文件';
+  }
+  const segments = relativePath.split(/[\\/]+/);
+  if (segments.some(segment => /[:*?"<>|]/.test(segment))) {
+    return 'launcherRelativePath 包含 Windows 非法文件名字符';
+  }
+  if (segments.some(segment => /^\p{White_Space}*$/u.test(segment) || segment.endsWith(' ') || segment.endsWith('.'))) {
+    return 'launcherRelativePath 的目录或文件名不能仅为空白，或以空格、句点结尾';
+  }
+  return '';
+}
+
 function validateHttpsUrl(value, fieldName) {
   const url = normalizeOptionalString(value);
   if (!url) return '';
@@ -395,7 +413,7 @@ function validateGameContract(contract, existingId = null, requireNewContract = 
   );
   if (fixedDirectoryError) return fixedDirectoryError;
 
-  const launcherPathError = validateRelativePath(contract.launcherRelativePath, 'launcherRelativePath');
+  const launcherPathError = validateLauncherRelativePath(contract.launcherRelativePath);
   if (launcherPathError) return launcherPathError;
 
   if (contract.launchMode && !LAUNCH_MODES.has(contract.launchMode)) {
@@ -531,7 +549,12 @@ function validateLauncherRelease(release, gameId, existingId = null) {
   if (!/^[a-f0-9]{64}$/.test(release.launcherSha256)) {
     return 'launcherSha256 必须是登录器入口文件的 64 位 SHA-256';
   }
-  const launcherPathError = validateRelativePath(release.launcherRelativePath, 'launcherRelativePath');
+  const game = getGameById(gameId);
+  const launcherRelativePath = release.launcherRelativePath || normalizeOptionalString(game?.launcherRelativePath);
+  if (release.published && !launcherRelativePath) {
+    return '发布登录器版本必须填写有效入口，或在游戏中配置入口';
+  }
+  const launcherPathError = validateLauncherRelativePath(launcherRelativePath);
   if (launcherPathError) return launcherPathError;
   const directoryError = validateDirectoryName(
     release.fixedLaunchDirectoryName,
@@ -561,6 +584,13 @@ function validateLauncherRelease(release, gameId, existingId = null) {
 
 function getGameById(gameId) {
   return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+}
+
+function ensureLauncherManifestUrl(gameId) {
+  db.prepare(`
+    UPDATE games SET launcherManifestUrl = ?, updatedAt = CURRENT_TIMESTAMP
+    WHERE id = ? AND TRIM(COALESCE(launcherManifestUrl, '')) = ''
+  `).run(`${PUBLIC_API_BASE}/games/${gameId}/launcher-manifest`, gameId);
 }
 
 function getLauncherReleaseById(releaseId) {
@@ -746,13 +776,7 @@ app.post('/api/games', requireAuth, (req, res) => {
     )
   `).run(game);
 
-  if (!game.launcherManifestUrl) {
-    db.prepare(`
-      UPDATE games
-      SET launcherManifestUrl = ?
-      WHERE id = ?
-    `).run(`${PUBLIC_API_BASE}/games/${result.lastInsertRowid}/launcher-manifest`, result.lastInsertRowid);
-  }
+  if (game.launcherUpdatePolicy) ensureLauncherManifestUrl(result.lastInsertRowid);
   const created = db.prepare('SELECT * FROM games WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(serializeGame(created));
 });
@@ -811,6 +835,7 @@ app.delete('/api/games/:id', requireAuth, (req, res) => {
 function serializePublicLauncherManifest(game, release) {
   const gameContract = normalizeGameContract(game, game);
   const releaseData = serializeLauncherRelease(release);
+  const launchMode = releaseData.launchMode || gameContract.launchMode;
   return {
     schemaVersion: 1,
     gameId: Number(game.id),
@@ -828,8 +853,10 @@ function serializePublicLauncherManifest(game, release) {
     signatureAlgorithm: releaseData.signatureAlgorithm,
     keyId: releaseData.keyId,
     launcherRelativePath: releaseData.launcherRelativePath || gameContract.launcherRelativePath,
-    launchMode: releaseData.launchMode || gameContract.launchMode,
-    fixedLaunchDirectoryName: releaseData.fixedLaunchDirectoryName || gameContract.fixedLaunchDirectoryName,
+    launchMode,
+    fixedLaunchDirectoryName: launchMode === 'fixed-root-junction'
+      ? releaseData.fixedLaunchDirectoryName || gameContract.fixedLaunchDirectoryName
+      : '',
     mandatory: releaseData.mandatory,
     minBoxVersion: releaseData.minBoxVersion,
     preservePaths: releaseData.preservePaths,
@@ -902,6 +929,7 @@ app.post('/api/games/:id/launcher-releases', requireAuth, (req, res) => {
     )
   `).run({ gameId: Number(req.params.id), ...release });
 
+  if (release.published) ensureLauncherManifestUrl(Number(req.params.id));
   const created = getLauncherReleaseById(result.lastInsertRowid);
   res.status(201).json(serializeLauncherRelease(created));
 });
@@ -944,6 +972,7 @@ app.put('/api/launcher-releases/:id', requireAuth, (req, res) => {
     WHERE id = @id
   `).run({ id: Number(req.params.id), ...release });
 
+  if (release.published && !existing.published) ensureLauncherManifestUrl(Number(existing.gameId));
   res.json(serializeLauncherRelease(getLauncherReleaseById(req.params.id)));
 });
 

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Lock, LogIn, Plus, Edit2, Trash2, Save, X, Gamepad2, Download, Tag, Image, ChevronLeft, Bell, ExternalLink } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { api, setAdminToken, clearAdminToken, getAdminToken } from '@/utils/api'
-import type { Game, GameBanner, HeroBanner, Announcement, LauncherRelease } from '@/types'
+import type { Game, HeroBanner, Announcement, LauncherRelease } from '@/types'
 import UppyUploader from '@/components/UppyUploader'
 
 function createEmptyHeroBanner(sortOrder = 0): HeroBanner {
@@ -95,12 +95,6 @@ interface GameForm {
   guideUrl: string
   dropRateUrl: string
   imageUrl: string
-  bannerTitle: string
-  bannerSubtitle: string
-  bannerDesc: string
-  bannerImage: string
-  bannerColor: string
-  bannerBgColor: string
   rating: number
   downloads: number
   status: 'active' | 'inactive' | 'maintenance'
@@ -200,23 +194,6 @@ function getNameFromFilename(filename: string): string {
   return nameWithoutExt.replace(/[-_]+/g, ' ').trim()
 }
 
-function toBannerOrNull(form: GameForm): GameBanner | null {
-  const banner = {
-    title: form.bannerTitle.trim(),
-    subtitle: form.bannerSubtitle.trim(),
-    desc: form.bannerDesc.trim(),
-    image: form.bannerImage.trim(),
-    color: form.bannerColor.trim(),
-    bgColor: form.bannerBgColor.trim(),
-  }
-
-  if (!banner.title && !banner.subtitle && !banner.desc && !banner.image) {
-    return null
-  }
-
-  return banner
-}
-
 function createEmptyForm(): GameForm {
   return {
     name: '',
@@ -230,12 +207,6 @@ function createEmptyForm(): GameForm {
     guideUrl: '',
     dropRateUrl: '',
     imageUrl: '',
-    bannerTitle: '',
-    bannerSubtitle: '',
-    bannerDesc: '',
-    bannerImage: '',
-    bannerColor: 'from-amber-500 to-orange-600',
-    bannerBgColor: 'bg-amber-50',
     rating: 5.0,
     downloads: 100,
     status: 'active',
@@ -262,12 +233,6 @@ function gameToForm(game: Game): GameForm {
     guideUrl: game.guideUrl || '',
     dropRateUrl: game.dropRateUrl || '',
     imageUrl: game.imageUrl,
-    bannerTitle: game.banner?.title || '',
-    bannerSubtitle: game.banner?.subtitle || '',
-    bannerDesc: game.banner?.desc || '',
-    bannerImage: game.banner?.image || '',
-    bannerColor: game.banner?.color || 'from-amber-500 to-orange-600',
-    bannerBgColor: game.banner?.bgColor || 'bg-amber-50',
     rating: game.rating,
     downloads: game.downloads,
     status: game.status || 'active',
@@ -294,7 +259,6 @@ function formToGame(form: GameForm): Omit<Game, 'id' | 'addedAt'> {
     guideUrl: form.guideUrl.trim(),
     dropRateUrl: form.dropRateUrl.trim(),
     imageUrl: form.imageUrl.trim(),
-    banner: toBannerOrNull(form),
     rating: Number(form.rating) || 0,
     downloads: Number(form.downloads) || 0,
     status: form.status,
@@ -584,6 +548,17 @@ export default function Admin() {
       ? await api.updateLauncherRelease(launcherReleaseForm.id, payload)
       : await api.createLauncherRelease(editingGame.id, payload)
     if (response.success) {
+      if (payload.published) {
+        const gamesResponse = await api.getGames(true)
+        const manifestUrl = gamesResponse.success
+          ? gamesResponse.data?.find(game => game.id === editingGame.id)?.launcherManifestUrl
+          : ''
+        if (manifestUrl) {
+          setForm(current => current.launcherManifestUrl.trim()
+            ? current
+            : { ...current, launcherManifestUrl: manifestUrl })
+        }
+      }
       await fetchLauncherReleases(editingGame.id)
       setLauncherReleaseForm(createEmptyLauncherReleaseForm())
       setLauncherReleaseMessage(launcherReleaseForm.published ? '登录器版本已保存并发布' : '登录器版本已保存为草稿')
@@ -1694,83 +1669,6 @@ export default function Admin() {
                   placeholder="热血, PK, 打金"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                 />
-              </div>
-
-              <div className="sm:col-span-2">
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
-                  <div className="mb-4">
-                    <div className="text-sm font-semibold text-gray-900">首页 Banner 数据</div>
-                    <p className="mt-1 text-xs text-gray-500">填写后会优先用于首页 Hero 轮播；留空则继续回退到站点本地 Banner 配置。</p>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 标题</label>
-                      <input
-                        type="text"
-                        value={form.bannerTitle}
-                        onChange={e => setForm({ ...form, bannerTitle: e.target.value })}
-                        placeholder="例如：复古传奇"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 副标题</label>
-                      <input
-                        type="text"
-                        value={form.bannerSubtitle}
-                        onChange={e => setForm({ ...form, bannerSubtitle: e.target.value })}
-                        placeholder="例如：经典再现，热血重燃"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 描述</label>
-                      <textarea
-                        value={form.bannerDesc}
-                        onChange={e => setForm({ ...form, bannerDesc: e.target.value })}
-                        placeholder="用于首页首屏的简短文案"
-                        rows={2}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Banner 图片</label>
-                      <input
-                        type="url"
-                        value={form.bannerImage}
-                        onChange={e => setForm({ ...form, bannerImage: e.target.value })}
-                        placeholder="例如：https://.../banner.jpg"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">前景渐变</label>
-                      <input
-                        type="text"
-                        value={form.bannerColor}
-                        onChange={e => setForm({ ...form, bannerColor: e.target.value })}
-                        placeholder="from-amber-500 to-orange-600"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">背景色标记</label>
-                      <input
-                        type="text"
-                        value={form.bannerBgColor}
-                        onChange={e => setForm({ ...form, bannerBgColor: e.target.value })}
-                        placeholder="bg-amber-50"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Description */}
