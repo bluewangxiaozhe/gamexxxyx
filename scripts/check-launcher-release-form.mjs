@@ -16,6 +16,9 @@ const scratch = fs.mkdtempSync(path.join(scratchRoot, 'launcher-form-'));
 const token = crypto.randomBytes(32).toString('hex');
 const oldHash = crypto.createHash('sha256').update('已发布入口').digest('hex');
 const newHash = crypto.createHash('sha256').update('新版入口').digest('hex');
+const legacyBanner = { title: '保留的历史 Banner', subtitle: '历史副标题', desc: '历史描述',
+  image: 'https://example.test/legacy-banner.jpg', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-50' };
+const existingScreenshots = ['https://example.test/retained-screenshot.jpg'];
 async function freePort() {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
@@ -67,7 +70,8 @@ try {
     }
   }
   const game = await api('/games', 'POST', { name: '登录器表单回归游戏', downloadUrl: 'https://example.test/game.zip',
-    installDirectoryName: 'form-check', launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable' });
+    installDirectoryName: 'form-check', launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable',
+    banner: legacyBanner, imageUrl: 'https://example.test/retained-cover.jpg', screenshots: existingScreenshots });
   const release = await api(`/games/${game.id}/launcher-releases`, 'POST', {
     version: '1.0.0', packageUrl: 'https://example.test/launcher.zip', packageFormat: 'zip',
     size: 128, sha256: oldHash, launcherSha256: oldHash,
@@ -109,6 +113,7 @@ try {
   });
   await page.goto(`http://127.0.0.1:${webPort}/#/admin`);
   await page.getByRole('row').filter({ hasText: '登录器表单回归游戏' }).locator('button').first().click();
+  check(await page.getByText('首页 Banner 数据', { exact: true }).count(), 0, '编辑游戏表单不显示首页 Banner 数据区块');
   const section = page.getByText('登录器版本发布', { exact: true }).locator('xpath=../../..');
   const entry = section.getByText('登录器入口相对路径', { exact: true }).locator('..').locator('input');
   const url = section.getByPlaceholder('也可以直接填写 HTTPS 安装包地址');
@@ -173,6 +178,17 @@ try {
   await section.getByRole('button', { name: '保存版本', exact: true }).click();
   await page.getByText('登录器版本已保存并发布', { exact: true }).waitFor();
   check((await api(`/games/${game.id}/launcher-releases`))[0].launcherSha256, newHash, '重新校验后可以保存当前哈希');
+  check(await page.getByText('封面图片', { exact: true }).count(), 1, '编辑游戏保留封面图片控件');
+  const originalGameSaved = page.waitForResponse(response => response.url() === `${apiBase}/games/${game.id}`
+    && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  const originalGameResponse = await originalGameSaved;
+  check(originalGameResponse.status(), 200, '普通游戏资料保存成功');
+  check(Object.hasOwn(originalGameResponse.request().postDataJSON(), 'banner'), false, '普通游戏资料保存不提交首页 Banner 字段');
+  const retainedGame = await api(`/games/${game.id}`);
+  check(retainedGame.banner, legacyBanner, '普通游戏资料保存保留原有 Banner 元数据');
+  check(retainedGame.imageUrl, 'https://example.test/retained-cover.jpg', '普通游戏资料保存保留原有封面');
+  check(retainedGame.screenshots, existingScreenshots, '普通游戏资料保存保留原有截图');
 
   const firstPublishGame = await api('/games', 'POST', { name: '首次发布清单同步回归游戏',
     downloadUrl: 'https://example.test/game.zip', installDirectoryName: 'first-publish-form',
@@ -269,6 +285,32 @@ try {
   const activatedGame = await api(`/games/${inactiveGame.id}`);
   check(activatedGame.status, 'active', '游戏保存后已经上架');
   check(activatedGame.launcherManifestUrl, inactiveGeneratedUrl, '激活并保存游戏后保留首次发布清单地址');
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Banner管理', exact: true }).click();
+  check(await page.getByRole('heading', { name: '首页 Banner 管理', exact: true }).isVisible(), true, '独立 Banner 管理仍可访问');
+  await page.getByRole('button', { name: '返回游戏', exact: true }).click();
+  await page.getByRole('button', { name: '添加游戏', exact: true }).click();
+  check(await page.getByText('首页 Banner 数据', { exact: true }).count(), 0, '新增游戏表单不显示首页 Banner 数据区块');
+  check(await page.getByText('封面图片', { exact: true }).count(), 1, '新增游戏保留封面图片控件');
+  check(await manifestUrl.inputValue(), '', '新增游戏默认不填写登录器清单地址');
+  check(await page.getByText('登录器更新策略', { exact: true }).locator('..').locator('select').inputValue(), '', '新增游戏默认不启用登录器更新策略');
+  await page.locator('label').filter({ hasText: /^游戏文件/ }).locator('..').locator('input[type=file]')
+    .setInputFiles({ name: 'new-game.zip', mimeType: 'application/zip', buffer: Buffer.from('新增游戏上传边界回归数据') });
+  await page.getByText('文件已上传', { exact: true }).waitFor();
+  await gameName.fill('新增表单精简回归游戏');
+  await page.getByPlaceholder('例如：wugengji-new').fill('new-form-defaults');
+  await page.locator('label').filter({ hasText: /^登录器入口相对路径/ }).locator('..').locator('input').fill('Login/Launcher.exe');
+  const newGameSaved = page.waitForResponse(response => response.url() === `${apiBase}/games`
+    && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '添加游戏', exact: true }).click();
+  const newGameResponse = await newGameSaved;
+  check(newGameResponse.status(), 201, '精简后的新增游戏表单通过真实 API 保存');
+  check(Object.hasOwn(newGameResponse.request().postDataJSON(), 'banner'), false, '新增游戏不提交首页 Banner 字段');
+  const newGame = await newGameResponse.json();
+  check(newGame.banner, null, '新增游戏使用 API 默认的空 Banner 数据');
+  check(newGame.launcherManifestUrl, '', '新增游戏保存后清单地址保持为空');
+  check(newGame.launcherUpdatePolicy, '', '新增游戏保存后更新策略保持未指定');
   success = true;
   console.log(`通过 ${count} 项真实浏览器表单回归检查。上传和计算接口使用受控边界响应，保存与读取使用本地真实 API/SQLite，未访问生产。`);
 } finally {

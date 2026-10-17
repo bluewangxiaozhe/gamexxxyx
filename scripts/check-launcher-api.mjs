@@ -91,13 +91,27 @@ try {
   check(migrated.body.installDirectoryName, '', '迁移不得自动改写历史安装目录');
   check((await request('/auth/check', 'GET', undefined, false)).status, 401, '未授权请求必须被拒绝');
   check((await request('/games', 'POST', { name: '缺少目录' })).status, 400, '新游戏缺少目录必须被拒绝');
+  const legacyBanner = { title: '历史游戏 Banner', subtitle: '保留原记录', desc: '普通资料保存不得清除',
+    image: 'https://example.test/legacy-banner.png', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-50' };
   const game = { name: '网页展示名称', installDirectoryName: 'stable-client-dir',
     launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable',
-    launcherUpdatePolicy: 'automatic', downloadUrl: 'https://example.test/game.zip', status: 'active' };
+    launcherUpdatePolicy: 'automatic', downloadUrl: 'https://example.test/game.zip', status: 'active', banner: legacyBanner };
   for (const invalidName of ['../escape', 'C:escape', '\\\\server\\share', '.', '..']) {
     check((await request('/games', 'POST', { ...game, installDirectoryName: invalidName })).status, 400, '非法安装目录必须被拒绝');
   }
   check((await request('/games', 'POST', { ...game, launcherRelativePath: '../Launcher.exe' })).status, 400, '非法入口路径必须被拒绝');
+  const invalidLaunchers = ['Login/Launcher.txt', 'Login/Bad:name.exe', 'Login/Bad?.exe',
+    'Login/<bad>.exe', 'Login/Bad|name.exe', 'Login/"bad".exe', 'Login/Bad*.exe'];
+  for (const launcherRelativePath of invalidLaunchers) {
+    check((await request('/games', 'POST', { ...game, launcherRelativePath })).status, 400,
+      `创建游戏必须拒绝无效入口 ${launcherRelativePath}`);
+  }
+  const upperCaseEntry = await request('/games', 'POST', { ...game, installDirectoryName: 'uppercase-exe-client',
+    launcherRelativePath: '正常目录/LAUNCHER.EXE', launcherUpdatePolicy: '' });
+  check(upperCaseEntry.status, 201, '中文目录与大写 EXE 后缀必须能够创建游戏');
+  const legacyEdited = await request('/games/1', 'PUT', { name: '历史游戏资料修改' });
+  check(legacyEdited.status, 200, '历史游戏空入口必须兼容普通资料保存');
+  check(legacyEdited.body.launcherRelativePath, '', '历史游戏普通资料保存不得填入伪造入口');
   check((await request('/games', 'POST', { ...game, launchMode: 'fixed-root-junction' })).status, 400, '固定目录模式必须提供目录名');
   const defaultCreated = await request('/games', 'POST', { ...game,
     name: '默认不启用登录器更新', installDirectoryName: 'default-new-client', launcherUpdatePolicy: '' });
@@ -106,6 +120,7 @@ try {
   check(defaultCreated.body.launcherUpdatePolicy, '', '默认新游戏必须保留空更新策略');
   const created = await request('/games', 'POST', game);
   check(created.status, 201, '合法游戏必须能够创建');
+  check(created.body.banner, legacyBanner, '游戏必须能够保存有效的历史 Banner 元数据');
   const id = created.body.id;
   check(created.body.launcherManifestUrl, `https://example.test/api/games/${id}/launcher-manifest`, '必须生成独立清单地址');
   check((await request('/games', 'POST', { ...game, name: '另一个游戏' })).status, 400, '重复安装目录必须被拒绝');
@@ -113,11 +128,70 @@ try {
   const renamed = await request(`/games/${id}`, 'PUT', { name: '修改后的网页名称' });
   check(renamed.body.installDirectoryName, game.installDirectoryName, '重命名必须保留安装目录');
   check(renamed.body.launcherRelativePath, game.launcherRelativePath, '重命名必须保留入口路径');
+  check(renamed.body.banner, legacyBanner, '普通资料保存省略 Banner 时必须保留原值');
+  check((await request(`/games/${id}`)).body.banner, legacyBanner, '省略 Banner 后数据库记录必须保留原值');
+  check(renamed.body.launchMode, game.launchMode, '普通资料保存必须保留启动模式');
+  check(renamed.body.launcherManifestUrl, created.body.launcherManifestUrl, '普通资料保存必须保留更新源地址');
+  check(renamed.body.launcherUpdatePolicy, game.launcherUpdatePolicy, '普通资料保存必须保留更新策略');
 
   const release = { version: '1.0.0', packageUrl: 'https://example.test/launcher-1.0.0.zip',
     packageFormat: 'zip', size: 1024, sha256: contentHash, launcherSha256: contentHash,
     launcherRelativePath: game.launcherRelativePath, launchMode: 'portable', mandatory: false,
     minBoxVersion: '1.3.0', preservePaths: ['Config/login.dat'], published: true };
+  const invalidSegmentResults = [];
+  const invalidSegmentLaunchers = ['目录./game.exe', '目录 /game.exe', '目录/\u3000/game.exe', '目录/\u0085/game.exe'];
+  for (const [index, launcherRelativePath] of invalidSegmentLaunchers.entries()) {
+    const invalidGame = await request('/games', 'POST', { ...game,
+      installDirectoryName: `invalid-segment-${index}`, launcherRelativePath });
+    const invalidRelease = await request(`/games/${id}/launcher-releases`, 'POST', {
+      ...release, version: `9.0.${index}`, launcherRelativePath });
+    invalidSegmentResults.push({ launcherRelativePath, gameStatus: invalidGame.status, releaseStatus: invalidRelease.status });
+  }
+  if (invalidSegmentResults.some(result => result.gameStatus !== 400 || result.releaseStatus !== 400)) {
+    console.error(JSON.stringify(invalidSegmentResults));
+  }
+  for (const result of invalidSegmentResults) {
+    check(result.gameStatus, 400, `创建游戏必须拒绝无效路径段 ${result.launcherRelativePath}`);
+    check(result.releaseStatus, 400, `发布版本必须拒绝无效路径段 ${result.launcherRelativePath}`);
+  }
+  for (const launcherRelativePath of invalidLaunchers) {
+    check((await request(`/games/${id}/launcher-releases`, 'POST', { ...release, launcherRelativePath })).status, 400,
+      `发布版本必须拒绝无效入口 ${launcherRelativePath}`);
+  }
+  check((await request('/games/1/launcher-releases', 'POST', { ...release, launcherRelativePath: '' })).status, 400,
+    '发布版本不得继承旧游戏的空入口');
+  const emptyEntryDraft = await request('/games/1/launcher-releases', 'POST', {
+    ...release, launcherRelativePath: '', published: false });
+  check(emptyEntryDraft.status, 201, '旧游戏空入口可以暂存为未发布草稿');
+  check((await request(`/launcher-releases/${emptyEntryDraft.body.id}`, 'PUT', { published: true })).status, 400,
+    '草稿转发布时必须校验实际继承入口');
+  const upperCaseRelease = await request(`/games/${upperCaseEntry.body.id}/launcher-releases`, 'POST', {
+    ...release, launcherRelativePath: upperCaseEntry.body.launcherRelativePath });
+  check(upperCaseRelease.status, 201, '中文目录、大写 EXE 入口和非 EXE 保留路径必须能够发布');
+
+  const fixedGame = await request('/games', 'POST', { ...game, installDirectoryName: 'fixed-mode-client',
+    launchMode: 'fixed-root-junction', fixedLaunchDirectoryName: 'GameRoot', launcherUpdatePolicy: '' });
+  check(fixedGame.status, 201, '固定目录游戏必须能够创建');
+  const fixedId = fixedGame.body.id;
+  const inheritedRelease = await request(`/games/${fixedId}/launcher-releases`, 'POST', {
+    ...release, launchMode: '', launcherRelativePath: '' });
+  check(inheritedRelease.status, 201, '版本可以继承游戏的有效入口与启动模式');
+  const inheritedManifest = await request(`/games/${fixedId}/launcher-manifest`);
+  check(inheritedManifest.body.launchMode, 'fixed-root-junction', '清单必须继承游戏的固定启动模式');
+  check(inheritedManifest.body.fixedLaunchDirectoryName, 'GameRoot', '继承固定模式必须保留游戏固定目录');
+  check(inheritedManifest.body.launcherRelativePath, game.launcherRelativePath, '清单必须继承游戏的有效入口');
+  const portableRelease = await request(`/games/${fixedId}/launcher-releases`, 'POST', {
+    ...release, version: '1.0.1', launchMode: 'portable', fixedLaunchDirectoryName: '' });
+  check(portableRelease.status, 201, '版本必须能够显式改为 portable');
+  const portableManifest = await request(`/games/${fixedId}/launcher-manifest`);
+  check(portableManifest.body.launchMode, 'portable', '版本的 portable 模式必须覆盖游戏设置');
+  check(portableManifest.body.fixedLaunchDirectoryName, '', 'portable 覆盖固定模式时不得继承旧固定目录');
+  const explicitFixedRelease = await request(`/games/${fixedId}/launcher-releases`, 'POST', {
+    ...release, version: '1.0.2', launchMode: 'fixed-root-junction', fixedLaunchDirectoryName: 'VersionGameRoot' });
+  check(explicitFixedRelease.status, 201, '版本必须能够指定独立固定目录');
+  const explicitFixedManifest = await request(`/games/${fixedId}/launcher-manifest`);
+  check(explicitFixedManifest.body.launchMode, 'fixed-root-junction', '显式固定模式必须保留');
+  check(explicitFixedManifest.body.fixedLaunchDirectoryName, 'VersionGameRoot', '显式版本固定目录必须覆盖游戏目录');
   const defaultId = defaultCreated.body.id;
   const defaultDraft = await request(`/games/${defaultId}/launcher-releases`, 'POST', { ...release, published: false });
   check(defaultDraft.status, 201, '默认新游戏必须能够保存版本草稿');
