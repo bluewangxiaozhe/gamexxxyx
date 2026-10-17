@@ -584,6 +584,17 @@ export default function Admin() {
       ? await api.updateLauncherRelease(launcherReleaseForm.id, payload)
       : await api.createLauncherRelease(editingGame.id, payload)
     if (response.success) {
+      if (payload.published) {
+        const gamesResponse = await api.getGames(true)
+        const manifestUrl = gamesResponse.success
+          ? gamesResponse.data?.find(game => game.id === editingGame.id)?.launcherManifestUrl
+          : ''
+        if (manifestUrl) {
+          setForm(current => current.launcherManifestUrl.trim()
+            ? current
+            : { ...current, launcherManifestUrl: manifestUrl })
+        }
+      }
       await fetchLauncherReleases(editingGame.id)
       setLauncherReleaseForm(createEmptyLauncherReleaseForm())
       setLauncherReleaseMessage(launcherReleaseForm.published ? '登录器版本已保存并发布' : '登录器版本已保存为草稿')

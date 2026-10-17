@@ -99,6 +99,11 @@ try {
   }
   check((await request('/games', 'POST', { ...game, launcherRelativePath: '../Launcher.exe' })).status, 400, '非法入口路径必须被拒绝');
   check((await request('/games', 'POST', { ...game, launchMode: 'fixed-root-junction' })).status, 400, '固定目录模式必须提供目录名');
+  const defaultCreated = await request('/games', 'POST', { ...game,
+    name: '默认不启用登录器更新', installDirectoryName: 'default-new-client', launcherUpdatePolicy: '' });
+  check(defaultCreated.status, 201, '默认新游戏必须能够创建');
+  check(defaultCreated.body.launcherManifestUrl, '', '默认新游戏未选择策略时不得自动启用清单');
+  check(defaultCreated.body.launcherUpdatePolicy, '', '默认新游戏必须保留空更新策略');
   const created = await request('/games', 'POST', game);
   check(created.status, 201, '合法游戏必须能够创建');
   const id = created.body.id;
@@ -113,6 +118,54 @@ try {
     packageFormat: 'zip', size: 1024, sha256: contentHash, launcherSha256: contentHash,
     launcherRelativePath: game.launcherRelativePath, launchMode: 'portable', mandatory: false,
     minBoxVersion: '1.3.0', preservePaths: ['Config/login.dat'], published: true };
+  const defaultId = defaultCreated.body.id;
+  const defaultDraft = await request(`/games/${defaultId}/launcher-releases`, 'POST', { ...release, published: false });
+  check(defaultDraft.status, 201, '默认新游戏必须能够保存版本草稿');
+  check((await request(`/games/${defaultId}`)).body.launcherManifestUrl, '', '保存草稿不得启用更新源');
+  check((await request(`/games/${defaultId}/launcher-manifest`)).status, 404, '只有草稿时不得提供已发布清单');
+  const defaultPublished = await request(`/games/${defaultId}/launcher-releases`, 'POST', { ...release, version: '1.0.1' });
+  check(defaultPublished.status, 201, '默认新游戏必须能够首次直接发布版本');
+  check((await request(`/games/${defaultId}`)).body.launcherManifestUrl,
+    `https://example.test/api/games/${defaultId}/launcher-manifest`, '首次直接发布版本必须启用内置更新源');
+  check((await request(`/games/${defaultId}/launcher-manifest`)).body.version, '1.0.1', '首次发布后必须提供真实版本清单');
+  check((await request(`/games/${defaultId}`)).body.launcherUpdatePolicy, '', '发布版本不得擅自改写空更新策略');
+
+  const draftGame = await request('/games', 'POST', { ...game,
+    installDirectoryName: 'draft-publish-client', launcherUpdatePolicy: '' });
+  check(draftGame.status, 201, '草稿转发布场景必须能够创建游戏');
+  const draftId = draftGame.body.id;
+  const draft = await request(`/games/${draftId}/launcher-releases`, 'POST', { ...release, published: false });
+  check((await request(`/games/${draftId}`)).body.launcherManifestUrl, '', '未发布草稿必须保持更新源关闭');
+  check((await request(`/launcher-releases/${draft.body.id}`, 'PUT', { published: true })).status, 200, '草稿必须能够转为发布');
+  check((await request(`/games/${draftId}`)).body.launcherManifestUrl,
+    `https://example.test/api/games/${draftId}/launcher-manifest`, '草稿转发布必须启用内置更新源');
+  check((await request(`/games/${draftId}/launcher-manifest`)).status, 200, '草稿转发布后清单必须可读');
+
+  for (const policy of ['automatic', 'notify', 'required']) {
+    const explicit = await request('/games', 'POST', { ...game,
+      installDirectoryName: `explicit-${policy}`, launcherUpdatePolicy: policy });
+    check(explicit.status, 201, `显式 ${policy} 策略必须能够创建游戏`);
+    check(explicit.body.launcherManifestUrl,
+      `https://example.test/api/games/${explicit.body.id}/launcher-manifest`, `显式 ${policy} 策略必须保留自动生成地址行为`);
+    check(explicit.body.launcherUpdatePolicy, policy, `必须保留显式 ${policy} 策略`);
+    check((await request(`/games/${explicit.body.id}/launcher-manifest`)).status, 404,
+      `显式 ${policy} 缺少已发布版本时必须保持 404`);
+  }
+
+  const externalUrl = 'https://updates.example.test/game/launcher-manifest.json';
+  const external = await request('/games', 'POST', { ...game,
+    installDirectoryName: 'external-manifest-client', launcherManifestUrl: externalUrl });
+  check(external.status, 201, '外部更新源游戏必须能够创建');
+  check(external.body.launcherManifestUrl, externalUrl, '创建游戏不得覆盖外部更新源');
+  const externalPublished = await request(`/games/${external.body.id}/launcher-releases`, 'POST', release);
+  check(externalPublished.status, 201, '外部更新源游戏必须能够保存已发布版本');
+  check((await request(`/games/${external.body.id}`)).body.launcherManifestUrl, externalUrl, '直接发布版本不得覆盖外部更新源');
+  const externalDraft = await request(`/games/${external.body.id}/launcher-releases`, 'POST', {
+    ...release, version: '1.0.1', published: false });
+  check((await request(`/launcher-releases/${externalDraft.body.id}`, 'PUT', { published: true })).status, 200,
+    '外部更新源游戏必须能够将草稿转为发布');
+  check((await request(`/games/${external.body.id}`)).body.launcherManifestUrl, externalUrl, '草稿转发布不得覆盖外部更新源');
+
   check((await request(`/games/${id}/launcher-releases`, 'POST', release, false)).status, 401, '版本发布必须鉴权');
   check((await request(`/games/${id}/launcher-releases`, 'POST', { ...release, sha256: 'invalid' })).status, 400, '非法包哈希必须被拒绝');
   check((await request(`/games/${id}/launcher-releases`, 'POST', { ...release, preservePaths: ['../escape'] })).status, 400, '非法保留路径必须被拒绝');

@@ -173,6 +173,102 @@ try {
   await section.getByRole('button', { name: '保存版本', exact: true }).click();
   await page.getByText('登录器版本已保存并发布', { exact: true }).waitFor();
   check((await api(`/games/${game.id}/launcher-releases`))[0].launcherSha256, newHash, '重新校验后可以保存当前哈希');
+
+  const firstPublishGame = await api('/games', 'POST', { name: '首次发布清单同步回归游戏',
+    downloadUrl: 'https://example.test/game.zip', installDirectoryName: 'first-publish-form',
+    launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable' });
+  check(firstPublishGame.launcherManifestUrl, '', '未发布版本的新游戏保持空清单地址');
+  await page.reload();
+  await page.getByRole('row').filter({ hasText: firstPublishGame.name }).locator('button').first().click();
+  const manifestUrl = page.getByText('登录器清单 HTTPS 地址', { exact: true }).locator('..').locator('input');
+  const gameName = page.locator('label').filter({ hasText: '游戏名称' }).locator('..').locator('input');
+  const description = page.getByPlaceholder('简短描述游戏特色...');
+  check(await manifestUrl.inputValue(), '', '新游戏外层表单清单地址为空');
+  await gameName.fill('尚未保存的展示名称');
+  await description.fill('尚未保存的游戏描述');
+  await section.getByText('版本号', { exact: true }).locator('..').locator('input').fill('1.0.0');
+  await url.fill('https://example.test/first-launcher.zip');
+  await entry.fill('Login/Launcher.exe');
+  const firstPublishRequested = new Promise(resolve => { inspectRequested = resolve; });
+  await section.getByRole('button', { name: '计算校验值', exact: true }).click();
+  await firstPublishRequested;
+  releaseInspect();
+  await page.waitForFunction(value => [...document.querySelectorAll('input')].some(input => input.readOnly && input.value === value), newHash);
+  await section.getByRole('button', { name: '创建版本', exact: true }).click();
+  await page.getByText('登录器版本已保存并发布', { exact: true }).waitFor();
+  const generatedUrl = `https://example.test/api/games/${firstPublishGame.id}/launcher-manifest`;
+  check((await api(`/games/${firstPublishGame.id}`)).launcherManifestUrl, generatedUrl, '首次发布后服务器生成内置清单地址');
+  check(await manifestUrl.inputValue(), generatedUrl, '首次发布后外层表单同步服务器生成的清单地址');
+  check(await gameName.inputValue(), '尚未保存的展示名称', '同步清单地址保留未保存的游戏名称');
+  check(await description.inputValue(), '尚未保存的游戏描述', '同步清单地址保留未保存的游戏描述');
+  const gameSaved = page.waitForResponse(response => response.url() === `${apiBase}/games/${firstPublishGame.id}`
+    && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  check((await gameSaved).status(), 200, '发布后保存外层游戏表单成功');
+  check((await api(`/games/${firstPublishGame.id}`)).launcherManifestUrl, generatedUrl, '保存游戏不会清空首次发布生成的清单地址');
+
+  const customManifestGame = await api('/games', 'POST', { name: '手填清单保留回归游戏',
+    downloadUrl: 'https://example.test/game.zip', installDirectoryName: 'custom-manifest-form',
+    launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable' });
+  const draft = await api(`/games/${customManifestGame.id}/launcher-releases`, 'POST', {
+    version: '1.0.0', packageUrl: 'https://example.test/draft-launcher.zip', packageFormat: 'zip',
+    size: 128, sha256: oldHash, launcherSha256: oldHash,
+    launcherRelativePath: 'Login/Launcher.exe', published: false,
+  });
+  check((await api(`/games/${customManifestGame.id}`)).launcherManifestUrl, '', '保存草稿不会生成清单地址');
+  await page.reload();
+  await page.getByRole('row').filter({ hasText: customManifestGame.name }).locator('button').first().click();
+  const customManifestUrl = 'https://example.test/custom/launcher-manifest.json';
+  await manifestUrl.fill(customManifestUrl);
+  await gameName.fill('尚未保存的自定义名称');
+  await description.fill('尚未保存的自定义描述');
+  await section.getByRole('button', { name: '编辑', exact: true }).click();
+  await section.getByRole('checkbox', { name: '立即发布', exact: true }).check();
+  await section.getByRole('button', { name: '保存版本', exact: true }).click();
+  await page.getByText('登录器版本已保存并发布', { exact: true }).waitFor();
+  check((await api(`/games/${customManifestGame.id}/launcher-releases`)).find(item => item.id === draft.id).published,
+    true, '浏览器将草稿版本发布到本地真实 API');
+  check((await api(`/games/${customManifestGame.id}`)).launcherManifestUrl,
+    `https://example.test/api/games/${customManifestGame.id}/launcher-manifest`, '草稿首次发布后服务器生成内置地址');
+  check(await manifestUrl.inputValue(), customManifestUrl, '发布后保留用户已填写但尚未保存的清单地址');
+  check(await gameName.inputValue(), '尚未保存的自定义名称', '保留清单地址时不改写未保存的名称');
+  check(await description.inputValue(), '尚未保存的自定义描述', '保留清单地址时不改写未保存的描述');
+  const customGameSaved = page.waitForResponse(response => response.url() === `${apiBase}/games/${customManifestGame.id}`
+    && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  check((await customGameSaved).status(), 200, '发布草稿后可以保存外层自定义地址');
+  check((await api(`/games/${customManifestGame.id}`)).launcherManifestUrl, customManifestUrl,
+    '保存游戏后服务器保留用户自定义清单地址');
+
+  const inactiveGame = await api('/games', 'POST', { name: '未上架游戏清单同步回归游戏',
+    downloadUrl: 'https://example.test/game.zip', installDirectoryName: 'inactive-manifest-form',
+    launcherRelativePath: 'Login/Launcher.exe', launchMode: 'portable', status: 'inactive' });
+  check(inactiveGame.launcherManifestUrl, '', '未上架新游戏未发布时保持空清单地址');
+  check((await fetch(`${apiBase}/games/${inactiveGame.id}`)).status, 404, '未上架游戏公开详情接口返回 404');
+  await page.reload();
+  await page.getByRole('row').filter({ hasText: inactiveGame.name }).locator('button').first().click();
+  await section.getByText('版本号', { exact: true }).locator('..').locator('input').fill('1.0.0');
+  await url.fill('https://example.test/inactive-launcher.zip');
+  await entry.fill('Login/Launcher.exe');
+  const inactiveInspectRequested = new Promise(resolve => { inspectRequested = resolve; });
+  await section.getByRole('button', { name: '计算校验值', exact: true }).click();
+  await inactiveInspectRequested;
+  releaseInspect();
+  await page.waitForFunction(value => [...document.querySelectorAll('input')].some(input => input.readOnly && input.value === value), newHash);
+  await section.getByRole('button', { name: '创建版本', exact: true }).click();
+  await page.getByText('登录器版本已保存并发布', { exact: true }).waitFor();
+  const inactiveGeneratedUrl = `https://example.test/api/games/${inactiveGame.id}/launcher-manifest`;
+  check((await api('/games?includeInactive=true')).find(item => item.id === inactiveGame.id).launcherManifestUrl,
+    inactiveGeneratedUrl, '未上架游戏发布后可从后台目录读取服务器清单地址');
+  check(await manifestUrl.inputValue(), inactiveGeneratedUrl, '未上架游戏首次发布后外层表单同步清单地址');
+  await page.locator('label').filter({ hasText: /^状态$/ }).locator('..').locator('select').selectOption('active');
+  const activatedGameSaved = page.waitForResponse(response => response.url() === `${apiBase}/games/${inactiveGame.id}`
+    && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  check((await activatedGameSaved).status(), 200, '发布版本后激活并保存游戏成功');
+  const activatedGame = await api(`/games/${inactiveGame.id}`);
+  check(activatedGame.status, 'active', '游戏保存后已经上架');
+  check(activatedGame.launcherManifestUrl, inactiveGeneratedUrl, '激活并保存游戏后保留首次发布清单地址');
   success = true;
   console.log(`通过 ${count} 项真实浏览器表单回归检查。上传和计算接口使用受控边界响应，保存与读取使用本地真实 API/SQLite，未访问生产。`);
 } finally {
@@ -185,6 +281,9 @@ try {
     fs.rmSync(scratch, { recursive: true });
   } else {
     fs.writeFileSync(path.join(scratch, 'checks.json'), `${JSON.stringify(records, null, 2)}\n`, 'utf8');
+    const evidence = path.join(root, 'docs', 'acceptance', 'launcher-manifest-form-20261017');
+    fs.mkdirSync(evidence, { recursive: true });
+    fs.writeFileSync(path.join(evidence, `failed-checks-${path.basename(scratch)}.json`), `${JSON.stringify(records, null, 2)}\n`, 'utf8');
     console.error(`失败现场：${scratch}`);
   }
 }

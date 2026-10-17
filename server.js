@@ -563,6 +563,13 @@ function getGameById(gameId) {
   return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
 }
 
+function ensureLauncherManifestUrl(gameId) {
+  db.prepare(`
+    UPDATE games SET launcherManifestUrl = ?, updatedAt = CURRENT_TIMESTAMP
+    WHERE id = ? AND TRIM(COALESCE(launcherManifestUrl, '')) = ''
+  `).run(`${PUBLIC_API_BASE}/games/${gameId}/launcher-manifest`, gameId);
+}
+
 function getLauncherReleaseById(releaseId) {
   return db.prepare('SELECT * FROM game_launcher_releases WHERE id = ?').get(releaseId);
 }
@@ -746,13 +753,7 @@ app.post('/api/games', requireAuth, (req, res) => {
     )
   `).run(game);
 
-  if (!game.launcherManifestUrl) {
-    db.prepare(`
-      UPDATE games
-      SET launcherManifestUrl = ?
-      WHERE id = ?
-    `).run(`${PUBLIC_API_BASE}/games/${result.lastInsertRowid}/launcher-manifest`, result.lastInsertRowid);
-  }
+  if (game.launcherUpdatePolicy) ensureLauncherManifestUrl(result.lastInsertRowid);
   const created = db.prepare('SELECT * FROM games WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(serializeGame(created));
 });
@@ -902,6 +903,7 @@ app.post('/api/games/:id/launcher-releases', requireAuth, (req, res) => {
     )
   `).run({ gameId: Number(req.params.id), ...release });
 
+  if (release.published) ensureLauncherManifestUrl(Number(req.params.id));
   const created = getLauncherReleaseById(result.lastInsertRowid);
   res.status(201).json(serializeLauncherRelease(created));
 });
@@ -944,6 +946,7 @@ app.put('/api/launcher-releases/:id', requireAuth, (req, res) => {
     WHERE id = @id
   `).run({ id: Number(req.params.id), ...release });
 
+  if (release.published && !existing.published) ensureLauncherManifestUrl(Number(existing.gameId));
   res.json(serializeLauncherRelease(getLauncherReleaseById(req.params.id)));
 });
 
