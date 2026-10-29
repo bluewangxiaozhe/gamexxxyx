@@ -52,6 +52,17 @@
 - 用户确认正式站需由 main 触发：推送 feature 后，将同一提交快进到 main，不改写历史。
 - Pages 构建完成后分别检查 `pages.wangzhe.me` 与正式官网的入口资源名；EO 的缓存刷新与 HTTP 强制 HTTPS 属于独立配置检查。
 
+## 正式发布验证结果
+
+- 代码提交 `756a5b878922e42999a8c3d7e2fb6aa6eef15bb0` 已通过 feature 推送到 main，没有改写历史。
+- GitHub 对该提交的 `Cloudflare Pages` 和 `deploy` 检查均为 completed/success。
+- `pages.wangzhe.me` 与正式官网均返回 `index-DuGE4-xv.js`、`index-dPbIEZSl.css`。
+- 从正式官网下载的 JS 与本地构建 SHA-256 一致：`FA820D30BC0CA99D5521C4B194E70D0F0F93C8B0F0740B74DA7A7519E7845524`。
+- 新 JS 响应包含 `public, immutable, max-age=31536000`，重复读取为 EO HIT。
+- 正式页面使用系统字体，无 Google Fonts、Unsplash 和首页后台路由文件请求；六张封面为 lazy/async，Banner 为 eager/high。
+- 公开游戏数据成功显示，四项公开读取耗时约 78～85 毫秒，页面没有持续加载与控制台错误。这是本次浏览器样本，不代表全国速度。
+- HTTP 强制 HTTPS 和首页 HTML 缓存仍属于控制台待核对项，没有在本次代码发布中修改。
+
 ## 未覆盖内容
 
 没有执行图片派生处理、完整安装包吞吐测试、真实游戏启动、DNS 修改或服务商配置变更。构建显示原有 Browserslist 数据过期提示，本次未升级依赖。

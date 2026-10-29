@@ -38,4 +38,4 @@
 
 ## 当前状态
 
-代码与本地验证已完成，准备提交和推送。验证结果见 `docs/acceptance/website-access-20261029.md`。正式发布以 main 对应的 Pages 构建和官网实际资源为准。
+代码与本地验证已完成。代码提交 `756a5b8` 已推送 feature 并快进到 main，Cloudflare Pages 构建成功；源站与官网均返回 `index-DuGE4-xv.js`，内容哈希与本地产物一致。验证结果见 `docs/acceptance/website-access-20261029.md`。
