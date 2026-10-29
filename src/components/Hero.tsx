@@ -39,7 +39,7 @@ const defaultBanners: HeroBanner[] = [
     title: '复古传奇',
     subtitle: '经典再现，热血重燃',
     desc: '原汁原味的传奇体验，战法道三职业，沙巴克攻城等你来战',
-    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1920&h=480&fit=crop',
+    image: '',
     color: 'from-amber-500 to-orange-600',
     bgColor: 'bg-amber-50',
     sortOrder: 0,
@@ -51,7 +51,7 @@ const defaultBanners: HeroBanner[] = [
     title: '沉默专属',
     subtitle: '独家版本，专属神器',
     desc: '全新沉默版本，专属装备系统，打造属于你的传奇之路',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1920&h=480&fit=crop',
+    image: '',
     color: 'from-purple-500 to-indigo-600',
     bgColor: 'bg-purple-50',
     sortOrder: 1,
@@ -63,7 +63,7 @@ const defaultBanners: HeroBanner[] = [
     title: '单职业超变',
     subtitle: '一刀999，爽到飞起',
     desc: '单职业超变版本，超高爆率，装备全靠打，散人也能当大佬',
-    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1920&h=480&fit=crop',
+    image: '',
     color: 'from-red-500 to-pink-600',
     bgColor: 'bg-red-50',
     sortOrder: 2,
@@ -154,7 +154,7 @@ export default function Hero({ games }: HeroProps) {
   const [legacyBanners] = useState<HeroBanner[]>(loadLegacyHeroBanners)
   const { heroBanners } = useHeroBanners()
   const { announcements: remoteAnnouncements } = useAnnouncements()
-  const { update: clientUpdate, loading: clientUpdateLoading } = useClientUpdate()
+  const { update: clientUpdate, loading: clientUpdateLoading, error: clientUpdateError } = useClientUpdate()
   const region = useRegion()
   const navigate = useNavigate()
 
@@ -253,10 +253,13 @@ export default function Hero({ games }: HeroProps) {
             className="relative min-h-[640px] w-full overflow-hidden lg:min-h-[700px]"
           >
             <div className="absolute inset-0 bg-slate-900" />
+            {/* React 18 使用小写 HTML 属性传递图片优先级。 */}
             {heroImage && !imageFailed && (
               <img
                 src={heroImage}
                 alt={banner.title}
+                loading="eager"
+                {...{ fetchpriority: 'high' }}
                 className="absolute inset-0 h-full w-full object-cover object-center"
                 onError={() => {
                   if (imageAttempt + 1 < heroImageCandidates.length) {
@@ -376,7 +379,7 @@ export default function Hero({ games }: HeroProps) {
                     ) : (
                       <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-3 font-medium text-white/60 sm:w-auto" aria-disabled="true">
                         <Download className="h-5 w-5" />
-                        {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                        {clientUpdateLoading ? '正在获取下载信息' : clientUpdateError || '下载暂不可用'}
                       </span>
                     )}
                   </motion.div>

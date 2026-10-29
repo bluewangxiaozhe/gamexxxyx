@@ -10,7 +10,7 @@ const features = [
 ]
 
 export default function DownloadCTA() {
-  const { update: clientUpdate, loading: clientUpdateLoading } = useClientUpdate()
+  const { update: clientUpdate, loading: clientUpdateLoading, error: clientUpdateError } = useClientUpdate()
 
   return (
     <section className="py-20 bg-gray-900 text-white overflow-hidden relative">
@@ -60,7 +60,7 @@ export default function DownloadCTA() {
               ) : (
                 <span className="inline-flex items-center gap-3 px-8 py-4 bg-gray-700 rounded-2xl font-bold text-lg text-gray-300" aria-disabled="true">
                   <Monitor className="w-6 h-6" />
-                  {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                  {clientUpdateLoading ? '正在获取下载信息' : clientUpdateError || '下载暂不可用'}
                 </span>
               )}
 
@@ -172,7 +172,7 @@ export default function DownloadCTA() {
               ) : (
                 <span className="inline-flex items-center justify-center gap-2 w-full px-6 py-4 bg-gray-700 rounded-xl font-bold text-lg text-gray-300 mb-6" aria-disabled="true">
                   <Monitor className="w-6 h-6" />
-                  {clientUpdateLoading ? '正在获取下载信息' : '下载暂不可用'}
+                  {clientUpdateLoading ? '正在获取下载信息' : clientUpdateError || '下载暂不可用'}
                 </span>
               )}
               

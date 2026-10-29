@@ -1,60 +1,27 @@
 import { useEffect, useState } from 'react'
-
-interface ClientUpdateInfo {
-  version: string
-  url: string
-  notes: string
-}
-
-const apiBase = ((import.meta as any).env?.VITE_API_BASE || 'https://api.567zm.com/api').replace(/\/$/, '')
-
-let cachedUpdate: ClientUpdateInfo | null = null
-let pendingRequest: Promise<ClientUpdateInfo | null> | null = null
-
-function isValidUpdate(data: unknown): data is ClientUpdateInfo {
-  if (!data || typeof data !== 'object') return false
-  const update = data as Partial<ClientUpdateInfo>
-  return typeof update.version === 'string' &&
-    typeof update.url === 'string' &&
-    typeof update.notes === 'string' &&
-    /^\d+\.\d+\.\d+$/.test(update.version) &&
-    update.url.startsWith('https://')
-}
-
-async function fetchClientUpdate(): Promise<ClientUpdateInfo | null> {
-  if (cachedUpdate) return cachedUpdate
-  if (!pendingRequest) {
-    pendingRequest = fetch(`${apiBase}/client-update`, { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) return null
-        const data = await response.json()
-        if (!isValidUpdate(data)) return null
-        cachedUpdate = data
-        return data
-      })
-      .catch(() => null)
-      .finally(() => {
-        pendingRequest = null
-      })
-  }
-  return pendingRequest
-}
+import { api, type ClientUpdateInfo } from '@/utils/api'
 
 export function useClientUpdate() {
-  const [update, setUpdate] = useState<ClientUpdateInfo | null>(cachedUpdate)
-  const [loading, setLoading] = useState(!cachedUpdate)
+  const [update, setUpdate] = useState<ClientUpdateInfo | null>(api.cachedClientUpdate)
+  const [loading, setLoading] = useState(!api.cachedClientUpdate)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
-    fetchClientUpdate().then((nextUpdate) => {
-      if (!active) return
-      setUpdate(nextUpdate)
-      setLoading(false)
-    })
+    api.getClientUpdate()
+      .then(nextUpdate => {
+        if (active) setUpdate(nextUpdate)
+      })
+      .catch(error => {
+        if (active) setError(error instanceof Error ? error.message : '获取下载信息失败')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
     return () => {
       active = false
     }
   }, [])
 
-  return { update, loading }
+  return { update, loading, error }
 }
